@@ -1,0 +1,6 @@
+.env*
+.idea/
+HELP.md
+frontend/node_modules/
+frontend/dist/
+target/
