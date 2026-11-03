@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* Iron / Lime: industrial gym surfaces with a high visibility training accent. */
+:root {
+  --bg: #101412;
+  --surface: #1a211d;
+  --ink: #f2f4ee;
+  --mute: #9da89f;
+  --line: #303a34;
+  --accent: #c7f36b;
+  --accent-ink: #101412;
+  --danger: #ff796b;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+}
+
+/* Цвета блинов пригодятся для групп мышц и рекордов */
+@theme {
+  --color-plate-red: #d62d20;
+  --color-plate-blue: #1f4fd8;
+  --color-plate-yellow: #f2b705;
+  --color-plate-green: #2e9e55;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+input, select, textarea { font-size: 16px; } /* Safari не приближает страницу при фокусе */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+html { touch-action: manipulation; }
+
+/* Shared surface language across pages and sheets. */
+body { background-image: radial-gradient(ellipse at 50% -24%, #263128 0%, transparent 55%); }
+button, a { -webkit-tap-highlight-color: transparent; }
+input, select, textarea { color-scheme: dark; }
+dialog::backdrop { backdrop-filter: blur(5px); }
+nav[aria-label="Основная навигация"] { background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(18px); }
+nav[aria-label="Основная навигация"] a { transition: color .18s ease, transform .18s ease; }
+nav[aria-label="Основная навигация"] a[aria-current="page"] { font-weight: 700; }
+main > h1 { letter-spacing: -.045em; }
+main section > h2 { letter-spacing: -.02em; }
+main li > a[href^="/workout/"] { box-shadow: inset 3px 0 0 var(--accent); transition: transform .16s ease, border-color .16s ease; }
+main li > a[href^="/workout/"]:active { transform: scale(.985); }
+dialog { border: 1px solid var(--line); box-shadow: 0 -24px 70px #0008; }
+@media (prefers-reduced-motion: no-preference) {
+  button { transition: background-color .18s ease, border-color .18s ease, opacity .18s ease, transform .18s ease; }
+}

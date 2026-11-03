@@ -1,6 +1,45 @@
-.env*
-.idea/
 HELP.md
-frontend/node_modules/
-frontend/dist/
 target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+frontend/node_modules
+frontend/dist
+.env
+
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+.env*
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+
+### VS Code ###
+.vscode/
+
+### Mac/OS ###
+.DS_Store
+
+### Env / secrets ###
+*.env
+application-local.properties
+application-local.yml
+application-local.yaml
