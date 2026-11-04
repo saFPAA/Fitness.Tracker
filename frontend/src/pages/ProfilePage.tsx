@@ -54,7 +54,7 @@ export default function ProfilePage() {
                 rest === s ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'
               }`}
             >
-              {mmss(s)}
+              {s === 0 ? 'Выкл.' : mmss(s)}
             </button>
           ))}
         </div>

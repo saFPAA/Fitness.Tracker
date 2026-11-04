@@ -141,7 +141,10 @@ export default function WorkoutPage() {
                 siblingIds={exercises.filter((e) => e.exerciseId === we.exerciseId).map((e) => e.id)}
                 expanded={open === we.id}
                 onToggle={() => setOpenId(open === we.id ? null : we.id)}
-                onLogged={() => timer.start(getRestSeconds())}
+                onLogged={() => {
+                  const seconds = getRestSeconds()
+                  if (seconds > 0) timer.start(seconds)
+                }}
               />
             ))}
           </div>
