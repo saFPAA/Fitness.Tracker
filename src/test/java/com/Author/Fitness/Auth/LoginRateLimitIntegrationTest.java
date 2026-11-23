@@ -11,6 +11,13 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -220,5 +227,158 @@ class LoginRateLimitIntegrationTest extends AbstractIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("Parallel failed logins: exactly the configured number reach authentication")
+    void parallelFailures_onlyLimitedNumberAreChecked() throws Exception {
+        register("RaceUser");
+        int limit = rateLimitProperties.getMaxAttemptsPerLoginIp();
+        int threads = 20;
+
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            List<Future<Integer>> futures = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    ready.countDown();
+                    start.await();
+                    return loginAttempt("RaceUser", "wrong-password", "192.0.2.40")
+                            .andReturn().getResponse().getStatus();
+                }));
+            }
+
+            ready.await();
+            start.countDown();
+
+            int unauthorized = 0;
+            int tooMany = 0;
+            for (Future<Integer> future : futures) {
+                int httpStatus = future.get(30, TimeUnit.SECONDS);
+                if (httpStatus == 401) {
+                    unauthorized++;
+                } else if (httpStatus == 429) {
+                    tooMany++;
+                }
+            }
+
+            assertThat(unauthorized).isEqualTo(limit);
+            assertThat(tooMany).isEqualTo(threads - limit);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("Successful logins do not consume the IP limit")
+    void successfulLogins_doNotConsumeIpLimit() throws Exception {
+        register("NatUserA");
+        register("NatUserB");
+        int originalLimit = rateLimitProperties.getMaxAttemptsPerIp();
+        rateLimitProperties.setMaxAttemptsPerIp(3);
+
+        try {
+            for (int attempt = 0; attempt < 6; attempt++) {
+                String username = attempt % 2 == 0 ? "NatUserA" : "NatUserB";
+                loginAttempt(username, "password123", "192.0.2.30")
+                        .andExpect(status().isOk());
+            }
+        } finally {
+            rateLimitProperties.setMaxAttemptsPerIp(originalLimit);
+        }
+    }
+
+    @Test
+    @DisplayName("A successful login releases only its own IP reservation, earlier IP failures stay")
+    void successfulLogin_keepsEarlierIpFailures() throws Exception {
+        register("IpKeepUser");
+        int originalLimit = rateLimitProperties.getMaxAttemptsPerIp();
+        rateLimitProperties.setMaxAttemptsPerIp(3);
+
+        try {
+            loginAttempt("UnknownA", "wrong-password", "192.0.2.31")
+                    .andExpect(status().isUnauthorized());          // IP: 1
+            loginAttempt("UnknownB", "wrong-password", "192.0.2.31")
+                    .andExpect(status().isUnauthorized());          // IP: 2
+            loginAttempt("IpKeepUser", "password123", "192.0.2.31")
+                    .andExpect(status().isOk());                    // резерв 3, снятие -> 2
+            loginAttempt("UnknownC", "wrong-password", "192.0.2.31")
+                    .andExpect(status().isUnauthorized());          // IP: 3
+            loginAttempt("UnknownD", "wrong-password", "192.0.2.31")
+                    .andExpect(status().isTooManyRequests());       // лимит достигнут
+        } finally {
+            rateLimitProperties.setMaxAttemptsPerIp(originalLimit);
+        }
+    }
+
+    @Test
+    @DisplayName("The per-login counter across many IPs only logs and never blocks")
+    void perLoginCounter_doesNotBlockLogin() throws Exception {
+        register("SoftUser");
+        int originalLimit = rateLimitProperties.getMaxAttemptsPerLogin();
+        rateLimitProperties.setMaxAttemptsPerLogin(2);
+
+        try {
+            loginAttempt("SoftUser", "wrong-password", "192.0.2.32")
+                    .andExpect(status().isUnauthorized());
+            loginAttempt("SoftUser", "wrong-password", "192.0.2.33")
+                    .andExpect(status().isUnauthorized());
+            loginAttempt("SoftUser", "wrong-password", "192.0.2.34")
+                    .andExpect(status().isUnauthorized());
+            loginAttempt("SoftUser", "wrong-password", "192.0.2.35")
+                    .andExpect(status().isUnauthorized());
+
+            loginAttempt("SoftUser", "password123", "192.0.2.36")
+                    .andExpect(status().isOk());
+        } finally {
+            rateLimitProperties.setMaxAttemptsPerLogin(originalLimit);
+        }
+    }
+
+    @Test
+    @DisplayName("IPv6 addresses from one /64 subnet share the same limit")
+    void ipv6_sameSubnetSharesLimit_differentSubnetDoesNot() throws Exception {
+        register("V6User");
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            loginAttempt("V6User", "wrong-password", "2001:db8:abcd:12::1")
+                    .andExpect(status().isUnauthorized());
+        }
+
+        loginAttempt("V6User", "password123", "2001:db8:abcd:12::2")
+                .andExpect(status().isTooManyRequests());
+
+        loginAttempt("V6User", "password123", "2001:db8:abcd:13::1")
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("A successful password change clears the failed password-change counter")
+    void passwordChangeSuccess_clearsCounter() throws Exception {
+        register("PwdClearUser");
+        int originalLimit = rateLimitProperties.getMaxFailedPasswordChangesPerUserIp();
+        rateLimitProperties.setMaxFailedPasswordChangesPerUserIp(2);
+
+        try {
+            String token = login("PwdClearUser", "password123").access();
+
+            passwordChangeAttempt(token, "wrong-password", "192.0.2.37")
+                    .andExpect(status().isBadRequest());
+            passwordChangeAttempt(token, "password123", "192.0.2.37")
+                    .andExpect(status().isOk());
+
+            String freshToken = login("PwdClearUser", "newPassword123").access();
+
+            passwordChangeAttempt(freshToken, "wrong-password", "192.0.2.37")
+                    .andExpect(status().isBadRequest());
+            passwordChangeAttempt(freshToken, "wrong-password", "192.0.2.37")
+                    .andExpect(status().isBadRequest());
+            passwordChangeAttempt(freshToken, "wrong-password", "192.0.2.37")
+                    .andExpect(status().isTooManyRequests());
+        } finally {
+            rateLimitProperties.setMaxFailedPasswordChangesPerUserIp(originalLimit);
+        }
+    }
 
 }

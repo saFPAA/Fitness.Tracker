@@ -15,8 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,12 +35,11 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(CreateUserRequest request, String clientIp){
-        Duration retryAfter = registrationBlockedFor(clientIp);
+        Duration retryAfter = acquireRegistrationAttempt(clientIp);
         if (!retryAfter.isZero()) {
             throw new TooManyAttemptsException(retryAfter);
         }
 
-        recordRegistrationAttempt(clientIp);
         userService.createUser(request);
 
         CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(request.username());
@@ -51,24 +49,18 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request, String clientIp) {
-        Duration retryAfter = blockedFor(request.username(), clientIp);
+        Duration retryAfter = acquireLoginAttempt(request.username(), clientIp);
 
         if (!retryAfter.isZero()) {
             throw new TooManyAttemptsException(retryAfter);
         }
 
-        Authentication authentication;
-        try {
-            authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.username(),
-                            request.password()
-                    )
-            );
-        } catch (AuthenticationException e) {
-            recordFailure(request.username(), clientIp);
-            throw e;
-        }
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.username(),
+                        request.password()
+                )
+        );
 
         recordSuccess(request.username(), clientIp);
 
@@ -79,45 +71,29 @@ public class AuthService {
         return issueTokens(userDetails);
     }
 
-    private Duration blockedFor(String username, String clientIp) {
+    private Duration acquireLoginAttempt(String username, String clientIp) {
         try {
-            return loginRateLimiter.blockedFor(username, clientIp);
-        } catch (RedisConnectionFailureException e) {
+            return loginRateLimiter.acquireLoginAttempt(username, clientIp);
+        } catch (DataAccessException e) {
             log.error("Redis unavailable; login rate limiting is bypassed", e);
             return Duration.ZERO;
-        }
-    }
-
-    private void recordFailure(String username, String clientIp) {
-        try {
-            loginRateLimiter.recordFailure(username, clientIp);
-        } catch (RedisConnectionFailureException e) {
-            log.error("Redis unavailable; failed login attempt was not recorded", e);
         }
     }
 
     private void recordSuccess(String username, String clientIp) {
         try {
             loginRateLimiter.recordSuccess(username, clientIp);
-        } catch (RedisConnectionFailureException e) {
+        } catch (DataAccessException e) {
             log.error("Redis unavailable; successful login counter was not cleared", e);
         }
     }
 
-    private Duration registrationBlockedFor(String clientIp) {
+    private Duration acquireRegistrationAttempt(String clientIp) {
         try {
-            return loginRateLimiter.registrationBlockedFor(clientIp);
-        } catch (RedisConnectionFailureException e) {
+            return loginRateLimiter.acquireRegistrationAttempt(clientIp);
+        } catch (DataAccessException e) {
             log.error("Redis unavailable; registration rate limiting is bypassed", e);
             return Duration.ZERO;
-        }
-    }
-
-    private void recordRegistrationAttempt(String clientIp) {
-        try {
-            loginRateLimiter.recordRegistrationAttempt(clientIp);
-        } catch (RedisConnectionFailureException e) {
-            log.error("Redis unavailable; registration attempt was not recorded", e);
         }
     }
 

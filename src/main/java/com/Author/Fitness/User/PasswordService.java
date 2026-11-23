@@ -11,7 +11,7 @@ import com.Author.Fitness.User.dto.ChangePasswordRequest;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,13 +30,14 @@ public class PasswordService {
     private final RefreshTokenService refreshTokenService;
     private final JwtService jwtService;
 
+
     @Transactional
     public AuthResponse changePassword(
             Long currentUserId,
             ChangePasswordRequest request,
             String clientIp
     ){
-        Duration retryAfter = passwordChangeBlockedFor(currentUserId, clientIp);
+        Duration retryAfter = acquirePasswordChangeAttempt(currentUserId, clientIp);
         if (!retryAfter.isZero()) {
             throw new TooManyAttemptsException(retryAfter);
         }
@@ -45,7 +46,6 @@ public class PasswordService {
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())){
-            recordPasswordChangeFailure(currentUserId, clientIp);
             throw new InvalidCurrentPasswordException();
         }
 
@@ -63,27 +63,20 @@ public class PasswordService {
         return new AuthResponse(accessToken, refreshToken);
     }
 
-    private Duration passwordChangeBlockedFor(Long userId, String clientIp) {
+    private Duration acquirePasswordChangeAttempt(Long userId, String clientIp) {
         try {
-            return loginRateLimiter.passwordChangeBlockedFor(userId, clientIp);
-        } catch (RedisConnectionFailureException e) {
+            return loginRateLimiter.acquirePasswordChangeAttempt(userId, clientIp);
+        } catch (DataAccessException e) {
             log.error("Redis unavailable; password-change rate limiting is bypassed", e);
             return Duration.ZERO;
         }
     }
 
-    private void recordPasswordChangeFailure(Long userId, String clientIp) {
-        try {
-            loginRateLimiter.recordPasswordChangeFailure(userId, clientIp);
-        } catch (RedisConnectionFailureException e) {
-            log.error("Redis unavailable; failed password-change attempt was not recorded", e);
-        }
-    }
 
     private void recordPasswordChangeSuccess(Long userId, String clientIp) {
         try {
             loginRateLimiter.recordPasswordChangeSuccess(userId, clientIp);
-        } catch (RedisConnectionFailureException e) {
+        } catch (DataAccessException e) {
             log.error("Redis unavailable; password-change counter was not cleared", e);
         }
     }

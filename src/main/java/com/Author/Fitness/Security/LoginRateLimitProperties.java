@@ -38,4 +38,7 @@ public class LoginRateLimitProperties {
     @NotNull
     private Duration passwordChangeWindow = Duration.ofMinutes(15);
 
+    @Min(1)
+    private int maxAttemptsPerLogin = 30;
+
 }

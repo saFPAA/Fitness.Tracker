@@ -4,7 +4,7 @@ package com.Author.Fitness.User;
 import com.Author.Fitness.Auth.RefreshTokenService;
 import com.Author.Fitness.Auth.dto.AuthResponse;
 import com.Author.Fitness.Exception.InvalidCurrentPasswordException;
-import com.Author.Fitness.Exception.PasswordValidationException;
+import com.Author.Fitness.Exception.TooManyAttemptsException;
 import com.Author.Fitness.Security.CustomUserDetails;
 import com.Author.Fitness.Security.JwtService;
 import com.Author.Fitness.Security.LoginRateLimiter;
@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
@@ -57,7 +58,9 @@ public class PasswordServiceTest {
                 refreshTokenService,
                 jwtService
         );
-        when(loginRateLimiter.passwordChangeBlockedFor(anyLong(), any())).thenReturn(Duration.ZERO);
+
+        lenient().when(loginRateLimiter.acquirePasswordChangeAttempt(anyLong(), any()))
+                .thenReturn(Duration.ZERO);
 
         user = UserEntity.builder()
                 .id(1L)
@@ -148,5 +151,106 @@ public class PasswordServiceTest {
 
         verifyNoInteractions(passwordEncoder, refreshTokenService, jwtService);
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Reserves an attempt before checking the current password")
+    void changePassword_reservesAttemptWithUserIdAndIp() {
+        ChangePasswordRequest request =
+                new ChangePasswordRequest("wrong-password", "new-password-123");
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-password", "old-hash")).thenReturn(false);
+
+        assertThatThrownBy(() -> passwordService.changePassword(1L, request, "127.0.0.1"))
+                .isInstanceOf(InvalidCurrentPasswordException.class);
+
+        verify(loginRateLimiter).acquirePasswordChangeAttempt(1L, "127.0.0.1");
+    }
+
+    @Test
+    @DisplayName("Rejects the request without touching the database when the limit is reached")
+    void changePassword_rateLimited_throwsTooManyAttemptsAndSkipsEverything() {
+        ChangePasswordRequest request =
+                new ChangePasswordRequest("current-password", "new-password-123");
+
+        when(loginRateLimiter.acquirePasswordChangeAttempt(1L, "127.0.0.1"))
+                .thenReturn(Duration.ofMinutes(10));
+
+        assertThatThrownBy(() -> passwordService.changePassword(1L, request, "127.0.0.1"))
+                .isInstanceOf(TooManyAttemptsException.class);
+
+        verifyNoInteractions(userRepository, passwordEncoder, refreshTokenService, jwtService);
+    }
+
+    @Test
+    @DisplayName("Clears the counter after a successful password change")
+    void changePassword_success_recordsPasswordChangeSuccess() {
+        ChangePasswordRequest request =
+                new ChangePasswordRequest("current-password", "new-password-123");
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("current-password", "old-hash")).thenReturn(true);
+        when(passwordEncoder.encode("new-password-123")).thenReturn("new-hash");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("new-access");
+        when(refreshTokenService.create(user)).thenReturn("new-refresh");
+
+        passwordService.changePassword(1L, request, "127.0.0.1");
+
+        verify(loginRateLimiter).recordPasswordChangeSuccess(1L, "127.0.0.1");
+    }
+
+    @Test
+    @DisplayName("Keeps the counter when the current password is incorrect")
+    void changePassword_incorrectCurrentPassword_doesNotClearCounter() {
+        ChangePasswordRequest request =
+                new ChangePasswordRequest("wrong-password", "new-password-123");
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-password", "old-hash")).thenReturn(false);
+
+        assertThatThrownBy(() -> passwordService.changePassword(1L, request, "127.0.0.1"))
+                .isInstanceOf(InvalidCurrentPasswordException.class);
+
+        verify(loginRateLimiter, never()).recordPasswordChangeSuccess(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("Continues without rate limiting when Redis fails on acquire (fail-open)")
+    void changePassword_redisFailsOnAcquire_stillChangesPassword() {
+        ChangePasswordRequest request =
+                new ChangePasswordRequest("current-password", "new-password-123");
+
+        when(loginRateLimiter.acquirePasswordChangeAttempt(1L, "127.0.0.1"))
+                .thenThrow(new QueryTimeoutException("redis timeout"));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("current-password", "old-hash")).thenReturn(true);
+        when(passwordEncoder.encode("new-password-123")).thenReturn("new-hash");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("new-access");
+        when(refreshTokenService.create(user)).thenReturn("new-refresh");
+
+        AuthResponse result = passwordService.changePassword(1L, request, "127.0.0.1");
+
+        assertThat(result.accessToken()).isEqualTo("new-access");
+        assertThat(user.getPassword()).isEqualTo("new-hash");
+    }
+
+    @Test
+    @DisplayName("Does not fail when Redis fails while clearing the counter")
+    void changePassword_redisFailsOnSuccessRecord_stillReturnsTokens() {
+        ChangePasswordRequest request =
+                new ChangePasswordRequest("current-password", "new-password-123");
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("current-password", "old-hash")).thenReturn(true);
+        when(passwordEncoder.encode("new-password-123")).thenReturn("new-hash");
+        doThrow(new QueryTimeoutException("redis timeout"))
+                .when(loginRateLimiter).recordPasswordChangeSuccess(1L, "127.0.0.1");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("new-access");
+        when(refreshTokenService.create(user)).thenReturn("new-refresh");
+
+        AuthResponse result = passwordService.changePassword(1L, request, "127.0.0.1");
+
+        assertThat(result.refreshToken()).isEqualTo("new-refresh");
     }
 }
