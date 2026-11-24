@@ -91,9 +91,9 @@ export default function WorkoutPage() {
 
       {q.isSuccess && (
         <>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight break-words">{q.data.name}</h1>
-          <p className="mt-1 text-mute">{fullDate(q.data.date)}</p>
-          <button onClick={() => setEditingMeta(true)} className="-ml-2 min-h-11 px-2 text-sm font-medium text-accent">
+          <p className="page-kicker mt-2">ТРЕНИРОВКА · {fullDate(q.data.date)}</p>
+          <h1 className="page-title break-words">{q.data.name}</h1>
+          <button onClick={() => setEditingMeta(true)} className="-ml-2 mt-1 min-h-10 px-2 text-xs font-semibold text-accent">
             Изменить название и дату
           </button>
 
@@ -103,9 +103,9 @@ export default function WorkoutPage() {
                 [exercises.length, plural(exercises.length, ['упражнение', 'упражнения', 'упражнений'])],
                 [allSets.length, plural(allSets.length, ['подход', 'подхода', 'подходов'])],
               ].map(([value, label]) => (
-                <div key={label} className="rounded-2xl border border-line bg-surface px-2 py-3">
-                  <dd className="num text-2xl font-bold">{value}</dd>
-                  <dt className="text-xs text-mute">{label}</dt>
+                <div key={label} className="metric-tile rounded-2xl px-2 py-3">
+                  <dd className="num text-2xl font-bold text-accent">{value}</dd>
+                  <dt className="mt-1 text-xs text-mute">{label}</dt>
                 </div>
               ))}
             </dl>
@@ -129,8 +129,8 @@ export default function WorkoutPage() {
             {exQ.isPending && <Skeleton className="h-20" />}
             {exQ.isError && <ErrorState message={exQ.error.message} onRetry={() => void exQ.refetch()} />}
             {exQ.isSuccess && exercises.length === 0 && (
-              <p className="rounded-2xl border border-dashed border-line px-4 py-10 text-center text-mute">
-                Добавьте первое упражнение.
+              <p className="rounded-2xl border border-dashed border-line bg-surface/40 px-4 py-10 text-center text-mute">
+                Добавь первое упражнение — и начни фиксировать подходы.
               </p>
             )}
             {exercises.map((we) => (

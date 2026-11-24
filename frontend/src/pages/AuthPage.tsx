@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import PlateMark from '../components/PlateMark'
 import { Button, Field } from '../components/ui'
 import { useAuth } from '../features/auth/AuthContext'
 
@@ -21,12 +20,11 @@ type RegisterValues = z.infer<typeof registerSchema>
 
 function Frame({ title, lead, children, footer }: { title: string; lead: string; children: ReactNode; footer: ReactNode }) {
   return (
-    <div className="mx-auto max-w-md px-5 pt-[calc(env(safe-area-inset-top)+3rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)]">
-      <PlateMark />
-      <h1 className="mt-8 text-4xl font-bold tracking-tight">{title}</h1>
-      <p className="mt-2 text-mute">{lead}</p>
-      <div className="mt-8">{children}</div>
-      <p className="mt-6 text-center text-mute">{footer}</p>
+    <div className="mx-auto max-w-md px-5 pt-[calc(env(safe-area-inset-top)+2.5rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+      <h1 className="text-4xl leading-[1.05] font-bold tracking-tight">{title}</h1>
+      <p className="mt-3 max-w-sm text-sm leading-relaxed text-mute">{lead}</p>
+      <div className="mt-7 rounded-3xl border border-line bg-surface p-5">{children}</div>
+      <p className="mt-5 text-center text-sm text-mute">{footer}</p>
     </div>
   )
 }
@@ -65,7 +63,7 @@ function LoginForm() {
     }
   })
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3.5">
       <Field label="Логин" autoComplete="username" autoCapitalize="none" autoCorrect="off" error={errors.username?.message} {...register('username')} />
       <Field
         label="Пароль"
@@ -97,7 +95,7 @@ function RegisterForm() {
     }
   })
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3.5">
       <Field label="Логин" autoComplete="username" autoCapitalize="none" autoCorrect="off" error={errors.username?.message} {...register('username')} />
       <Field label="Почта" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" error={errors.email?.message} {...register('email')} />
       <Field

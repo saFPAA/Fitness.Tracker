@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
-/* Iron / Lime: industrial gym surfaces with a high visibility training accent. */
+/* Graphite / Electric Lime: neutral graphite surfaces with one vivid training accent. */
 :root {
-  --bg: #101412;
-  --surface: #1a211d;
-  --ink: #f2f4ee;
-  --mute: #9da89f;
-  --line: #303a34;
-  --accent: #c7f36b;
-  --accent-ink: #101412;
+  --bg: #121212;
+  --surface: #1e1e24;
+  --ink: #f5f5f7;
+  --mute: #a6a6b0;
+  --line: #35353c;
+  --accent: #ccff00;
+  --accent-ink: #121212;
   --danger: #ff796b;
   color-scheme: dark;
 }
@@ -24,12 +24,12 @@
   --color-danger: var(--danger);
 }
 
-/* Цвета блинов пригодятся для групп мышц и рекордов */
+/* Нейтральные оттенки сохраняют различимость групп без конкурирующих акцентов. */
 @theme {
-  --color-plate-red: #d62d20;
-  --color-plate-blue: #1f4fd8;
-  --color-plate-yellow: #f2b705;
-  --color-plate-green: #2e9e55;
+  --color-plate-red: #d5d5d8;
+  --color-plate-blue: #afb0b8;
+  --color-plate-yellow: #eeeeef;
+  --color-plate-green: #85868e;
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
 }
 
@@ -48,7 +48,7 @@ input, select, textarea { font-size: 16px; } /* Safari не приближает
 html { touch-action: manipulation; }
 
 /* Shared surface language across pages and sheets. */
-body { background-image: radial-gradient(ellipse at 50% -24%, #263128 0%, transparent 55%); }
+body { background-image: radial-gradient(ellipse at 50% -24%, #1e1e24 0%, transparent 55%); }
 button, a { -webkit-tap-highlight-color: transparent; }
 input, select, textarea { color-scheme: dark; }
 dialog::backdrop { backdrop-filter: blur(5px); }
@@ -60,6 +60,16 @@ main section > h2 { letter-spacing: -.02em; }
 main li > a[href^="/workout/"] { box-shadow: inset 3px 0 0 var(--accent); transition: transform .16s ease, border-color .16s ease; }
 main li > a[href^="/workout/"]:active { transform: scale(.985); }
 dialog { border: 1px solid var(--line); box-shadow: 0 -24px 70px #0008; }
+.page-kicker { color: var(--mute); font-size: .68rem; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+.page-title { margin-top: .3rem; font-size: clamp(1.8rem, 7vw, 2.05rem); line-height: 1.08; font-weight: 760; letter-spacing: -.045em; }
+.page-lead { margin-top: .45rem; color: var(--mute); font-size: .9rem; }
+.surface-card { border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
+.dashboard-hero { overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 1.3rem; background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 11%, var(--surface)), var(--surface) 70%); }
+.metric-tile { border: 1px solid var(--line); border-radius: 1rem; background: color-mix(in srgb, var(--surface) 88%, var(--bg)); }
+.list-row { transition: background-color .16s ease, transform .16s ease; }
+.list-row:active { background: color-mix(in srgb, var(--surface) 82%, var(--accent)); }
+.field-control { min-height: 3.1rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--surface); color: var(--ink); }
+nav[aria-label="Основная навигация"] { border: 1px solid color-mix(in srgb, var(--line) 85%, transparent); border-bottom: 0; border-radius: 1.25rem 1.25rem 0 0; box-shadow: 0 -10px 34px #0003; }
 @media (prefers-reduced-motion: no-preference) {
   button { transition: background-color .18s ease, border-color .18s ease, opacity .18s ease, transform .18s ease; }
 }

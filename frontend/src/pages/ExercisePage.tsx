@@ -8,7 +8,7 @@ import StatusBar from '../features/sync/StatusBar'
 import NameWorkoutSheet from '../features/workouts/NameWorkoutSheet'
 import { NeedNameError, useAddToToday, useDeleteExercise } from '../features/exercises/hooks'
 import { useCatalog } from '../features/training/hooks'
-import { groupDot, safeHttpUrl } from '../lib/format'
+import { groupDot, safeHttpUrl, youtubeEmbedUrl } from '../lib/format'
 import { useBack } from '../lib/useBack'
 
 export default function ExercisePage() {
@@ -21,14 +21,14 @@ export default function ExercisePage() {
   const isAdmin = useAuth().user?.role === 'ADMIN'
   const [editing, setEditing] = useState(false)
   const [confirm, setConfirm] = useState(false)
-  const [imgFailed, setImgFailed] = useState(false)
+  const [videoOpen, setVideoOpen] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [naming, setNaming] = useState(false)
 
   const ex = catalog.data?.find((e) => e.id === id)
   const groups = [...new Set((catalog.data ?? []).map((e) => e.muscleGroup))].sort((a, b) => a.localeCompare(b, 'ru'))
-  const image = safeHttpUrl(ex?.imageUrl)
   const video = safeHttpUrl(ex?.videoUrl)
+  const videoEmbed = youtubeEmbedUrl(ex?.videoUrl)
 
   const add = async () => {
     if (!ex) return
@@ -74,26 +74,65 @@ export default function ExercisePage() {
 
       {ex && (
         <>
-          {image && !imgFailed && (
-            <img
-              src={image}
-              alt=""
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              onError={() => setImgFailed(true)}
-              className="mt-2 max-h-64 w-full rounded-2xl border border-line object-cover"
-            />
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-[1.8rem] leading-[1.06] font-bold tracking-tight break-words">{ex.name}</h1>
+              <p className="mt-2 flex items-center gap-2 text-sm text-mute">
+                <span className={`size-2.5 shrink-0 rounded-full ${groupDot(ex.muscleGroup)}`} aria-hidden="true" />
+                <span>{ex.muscleGroup}{ex.equipment ? ` · ${ex.equipment}` : ''}</span>
+              </p>
+            </div>
+            <span className="mt-1 grid size-10 shrink-0 place-items-center rounded-xl bg-surface text-accent" aria-hidden="true">◉</span>
+          </div>
+          {ex.description && <p className="mt-4 break-words whitespace-pre-line text-sm leading-relaxed text-mute">{ex.description}</p>}
+          {videoEmbed && (
+            <section className="mt-5" aria-label={`Видео: ${ex.name}`}>
+              {!videoOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setVideoOpen(true)}
+                  className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3 text-left active:opacity-80"
+                  aria-label={`Воспроизвести видео: ${ex.name}`}
+                >
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent text-lg text-accent-ink" aria-hidden="true">
+                    ▶
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">Видео техники</span>
+                    <span className="mt-1 block text-xs text-mute">Смотреть на YouTube</span>
+                  </span>
+                  <span className="text-lg text-accent" aria-hidden="true">↗</span>
+                </button>
+              ) : (
+                <>
+                  <div className="aspect-video overflow-hidden rounded-2xl border border-line bg-black">
+                    <iframe
+                      src={videoEmbed}
+                      title={`Техника выполнения: ${ex.name}`}
+                      loading="lazy"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                      className="size-full"
+                    />
+                  </div>
+                  <button type="button" onClick={() => setVideoOpen(false)} className="mt-1 inline-flex min-h-11 items-center font-medium text-accent">
+                    Свернуть видео
+                  </button>
+                </>
+              )}
+              {video && (
+                <a href={video} target="_blank" rel="noopener noreferrer" className="ml-3 inline-flex min-h-11 items-center text-sm font-medium text-accent">
+                  Открыть на YouTube ↗
+                </a>
+              )}
+            </section>
           )}
-          <h1 className="mt-4 text-3xl font-bold tracking-tight break-words">{ex.name}</h1>
-          <p className="mt-1 flex items-center gap-2 text-mute">
-            <span className={`size-2.5 rounded-full ${groupDot(ex.muscleGroup)}`} aria-hidden="true" />
-            {ex.muscleGroup}
-            {ex.equipment ? ` · ${ex.equipment}` : ''}
-          </p>
-          {ex.description && <p className="mt-4 break-words whitespace-pre-line">{ex.description}</p>}
-          {video && (
-            <a href={video} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex min-h-11 items-center font-medium text-accent">
-              Смотреть видео ↗
+          {video && !videoEmbed && (
+            <a href={video} target="_blank" rel="noopener noreferrer" className="mt-5 flex min-h-20 items-center gap-3 rounded-2xl border border-line bg-surface p-3 font-medium text-accent">
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent text-lg text-accent-ink" aria-hidden="true">▶</span>
+              <span className="flex-1 text-left"><span className="block text-ink">Видео техники</span><span className="mt-1 block text-xs text-mute">Открыть внешний источник</span></span>
+              <span aria-hidden="true">↗</span>
             </a>
           )}
 

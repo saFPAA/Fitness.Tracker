@@ -13,7 +13,7 @@ export function Button({
         : 'border border-line bg-surface text-ink'
   return (
     <button
-      className={`min-h-13 rounded-xl px-5 text-base font-semibold transition-opacity disabled:opacity-50 active:opacity-80 ${look} ${className}`}
+      className={`min-h-12 rounded-2xl px-4 text-sm font-semibold transition-opacity disabled:opacity-50 active:opacity-80 ${look} ${className}`}
       {...props}
     />
   )
@@ -36,7 +36,7 @@ export function Field({
           id={id}
           aria-invalid={!!error}
           aria-describedby={error ? `${id}-err` : undefined}
-          className="min-h-13 w-full rounded-xl border border-line bg-surface px-4 pr-20 text-ink placeholder:text-mute aria-[invalid=true]:border-danger"
+            className="field-control w-full px-4 pr-20 placeholder:text-mute focus:border-accent focus:outline-none aria-[invalid=true]:border-danger"
           {...input}
         />
         {trailing && <div className="absolute inset-y-0 right-1 flex items-center">{trailing}</div>}
@@ -123,7 +123,7 @@ export function TextAreaField({
         rows={3}
         aria-invalid={!!error}
         aria-describedby={error ? `${id}-err` : undefined}
-        className="w-full resize-none rounded-xl border border-line bg-surface px-4 py-3 text-ink placeholder:text-mute aria-[invalid=true]:border-danger"
+        className="field-control w-full resize-none px-4 py-3 placeholder:text-mute focus:border-accent focus:outline-none aria-[invalid=true]:border-danger"
         {...area}
       />
       {error && (

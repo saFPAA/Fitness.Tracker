@@ -39,7 +39,9 @@ export default function HistoryPage() {
 
   return (
     <>
-      <h1 className="text-3xl font-bold tracking-tight">История</h1>
+      <p className="page-kicker">ПОСЛЕДОВАТЕЛЬНОСТЬ РЕШАЕТ</p>
+      <h1 className="page-title">История</h1>
+      <p className="page-lead">Твои тренировки и движение вперёд.</p>
 
       {q.isPending && (
         <div className="mt-6 flex flex-col gap-3">
@@ -63,15 +65,15 @@ export default function HistoryPage() {
               [stats.month, 'в этом месяце'],
               [stats.streak, `${plural(stats.streak, ['неделя', 'недели', 'недель'])} подряд`],
             ].map(([value, label]) => (
-              <div key={label} className="rounded-2xl border border-line bg-surface px-2 py-3">
-                <dd className="num text-2xl font-bold">{value}</dd>
-                <dt className="text-xs text-mute">{label}</dt>
+              <div key={label} className="metric-tile px-2 py-3">
+                <dd className="num text-2xl font-bold text-accent">{value}</dd>
+                <dt className="mt-1 text-[10px] leading-tight text-mute">{label}</dt>
               </div>
             ))}
           </dl>
 
           <div className="mt-5">
-            <Field label="Поиск" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Название тренировки" autoComplete="off" />
+            <Field label="Найти тренировку" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Название или план" autoComplete="off" />
           </div>
           <div className="mt-3 flex gap-2 overflow-x-auto" role="group" aria-label="Период">
             {PERIODS.map((p) => (
@@ -80,7 +82,7 @@ export default function HistoryPage() {
                 onClick={() => setPeriod(p.id)}
                 aria-pressed={period === p.id}
                 className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-medium ${
-                  period === p.id ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface'
+                  period === p.id ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface text-mute'
                 }`}
               >
                 {p.label}

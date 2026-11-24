@@ -16,13 +16,13 @@ const tabs = [
 export default function AppShell() {
   return (
     <div className="mx-auto flex min-h-full max-w-xl flex-col">
-      <main className="flex-1 px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-28">
+      <main className="flex-1 px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-28">
         <StatusBar />
         <Outlet />
       </main>
       <nav
         aria-label="Основная навигация"
-        className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]"
+        className="fixed inset-x-0 bottom-0 z-10 mx-auto max-w-xl border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
       >
         <ul className="mx-auto flex max-w-xl">
           {tabs.map((t) => (
@@ -31,7 +31,7 @@ export default function AppShell() {
                 to={t.to}
                 end={t.end}
                 className={({ isActive }) =>
-                  `flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-medium ${isActive ? 'text-accent' : 'text-mute'}`
+                  `flex min-h-[4.1rem] flex-col items-center justify-center gap-1 text-[11px] font-semibold ${isActive ? 'text-accent' : 'text-mute'}`
                 }
               >
                 {t.icon}

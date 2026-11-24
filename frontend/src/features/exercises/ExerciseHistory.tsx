@@ -2,20 +2,7 @@ import { Link } from 'react-router-dom'
 import { ErrorState, Skeleton } from '../../components/ui'
 import { dayNum, fullDate, monthShort } from '../../lib/dates'
 import { fmtWeight, plural } from '../../lib/format'
-import { bestSet, volume } from '../../lib/training'
-import { useExerciseHistory, type Session } from './hooks'
-
-/** Сравнение с предыдущей тренировкой: сначала по лучшему весу, при равенстве по объёму. */
-function delta(cur: Session, prev: Session | undefined): string | null {
-  if (!prev) return null
-  const dw = bestSet(cur.sets)!.weight - bestSet(prev.sets)!.weight
-  if (dw > 0) return `↑ +${fmtWeight(dw)} кг к прошлой`
-  if (dw < 0) return `↓ −${fmtWeight(-dw)} кг к прошлой`
-  const dv = volume(cur.sets) - volume(prev.sets)
-  if (dv > 0) return `↑ объём +${fmtWeight(Math.round(dv))} кг`
-  if (dv < 0) return `↓ объём −${fmtWeight(Math.round(-dv))} кг`
-  return '= без изменений'
-}
+import { useExerciseHistory } from './hooks'
 
 export default function ExerciseHistory({ exerciseId }: { exerciseId: number }) {
   const history = useExerciseHistory(exerciseId)
@@ -49,16 +36,8 @@ export default function ExerciseHistory({ exerciseId }: { exerciseId: number }) 
               <dt className="text-xs text-mute">{plural(history.data.sessionCount, ['тренировка', 'тренировки', 'тренировок'])}</dt>
             </div>
           </dl>
-          {history.data.bestE1rm > 0 && (
-            <p className="num mt-3 text-sm text-mute">
-              Расчётный максимум на 1 повторение: ≈ {fmtWeight(Math.round(history.data.bestE1rm * 10) / 10)} кг
-            </p>
-          )}
-
           <ul className="mt-4 flex flex-col gap-3">
-            {history.data.sessions.map((s, i) => {
-              const d = delta(s, history.data.sessions[i + 1])
-              return (
+            {history.data.sessions.map((s) => (
                 <li key={`${s.workout.id}-${s.sets[0].workoutExerciseId}`}>
                   <Link to={`/workout/${s.workout.id}`} className="flex gap-4 rounded-2xl border border-line bg-surface p-3 active:opacity-80">
                     <div className="flex size-14 shrink-0 flex-col items-center justify-center rounded-xl bg-bg">
@@ -70,14 +49,10 @@ export default function ExerciseHistory({ exerciseId }: { exerciseId: number }) 
                       <p className="num mt-0.5 font-semibold break-words">
                         {s.sets.map((x) => `${x.repsDone}×${fmtWeight(x.weight)}`).join(' · ')}
                       </p>
-                      <p className="num mt-1 text-sm text-mute">
-                        Объём {fmtWeight(Math.round(volume(s.sets)))} кг{d ? ` · ${d}` : ''}
-                      </p>
                     </div>
                   </Link>
                 </li>
-              )
-            })}
+            ))}
           </ul>
           {history.data.sessionCount > history.data.sessions.length && (
             <p className="mt-3 text-center text-sm text-mute">Показаны последние тренировки. Рекорды считаются по всем.</p>

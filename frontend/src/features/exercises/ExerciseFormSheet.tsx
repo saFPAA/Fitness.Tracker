@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { ExerciseInput } from '../../api/exercises'
 import type { Exercise } from '../../api/types'
 import { Button, Field, Sheet, TextAreaField } from '../../components/ui'
-import { isHttpUrl } from '../../lib/format'
+import { isHttpUrl, safeHttpUrl, youtubeEmbedUrl } from '../../lib/format'
 import { useSaveExercise } from './hooks'
 
 const long = 'Не больше 255 символов'
@@ -39,6 +39,13 @@ function Form({ exercise, groups, onDone }: { exercise?: Exercise; groups: strin
       imageUrl: exercise?.imageUrl ?? '',
     },
   })
+  const imageValue = register('imageUrl')
+  const videoValue = register('videoUrl')
+  const [imagePreview, setImagePreview] = useState(exercise?.imageUrl ?? '')
+  const [videoPreview, setVideoPreview] = useState(exercise?.videoUrl ?? '')
+  const [imageFailed, setImageFailed] = useState(false)
+  const previewImage = safeHttpUrl(imagePreview)
+  const previewVideo = youtubeEmbedUrl(videoPreview)
 
   const onSubmit = handleSubmit(async (v) => {
     setError(null)
@@ -69,8 +76,64 @@ function Form({ exercise, groups, onDone }: { exercise?: Exercise; groups: strin
       </datalist>
       <Field label="Инвентарь (необязательно)" autoComplete="off" error={errors.equipment?.message} {...register('equipment')} />
       <TextAreaField label="Описание (необязательно)" error={errors.description?.message} {...register('description')} />
-      <Field label="Ссылка на видео (необязательно)" type="url" inputMode="url" autoCapitalize="none" autoComplete="off" error={errors.videoUrl?.message} {...register('videoUrl')} />
-      <Field label="Ссылка на картинку (необязательно)" type="url" inputMode="url" autoCapitalize="none" autoComplete="off" error={errors.imageUrl?.message} {...register('imageUrl')} />
+      <Field
+        label="Ссылка на видео (необязательно)"
+        placeholder="https://youtu.be/..."
+        type="url"
+        inputMode="url"
+        autoCapitalize="none"
+        autoComplete="off"
+        error={errors.videoUrl?.message}
+        {...videoValue}
+        onChange={(event) => {
+          videoValue.onChange(event)
+          setVideoPreview(event.target.value)
+        }}
+      />
+      <p className="-mt-3 text-xs text-mute">Встроенный плеер доступен для ссылок YouTube. Другие ссылки откроются отдельно.</p>
+      {videoPreview.trim() && (
+        previewVideo ? (
+          <div className="aspect-video overflow-hidden rounded-xl border border-line bg-black">
+            <iframe
+              src={previewVideo}
+              title="Предпросмотр видео"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+              className="size-full"
+            />
+          </div>
+        ) : (
+          <p className="-mt-3 text-xs text-mute">Ссылка сохранится, но не распознана как YouTube-видео для встроенного плеера.</p>
+        )
+      )}
+      <Field
+        label="Ссылка на фото (необязательно)"
+        placeholder="https://…"
+        type="url"
+        inputMode="url"
+        autoCapitalize="none"
+        autoComplete="off"
+        error={errors.imageUrl?.message}
+        {...imageValue}
+        onChange={(event) => {
+          imageValue.onChange(event)
+          setImagePreview(event.target.value)
+          setImageFailed(false)
+        }}
+      />
+      {previewImage && !imageFailed && (
+        <img
+          src={previewImage}
+          alt="Предпросмотр фото упражнения"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setImageFailed(true)}
+          className="max-h-48 w-full rounded-xl border border-line object-cover"
+        />
+      )}
+      {previewImage && imageFailed && <p className="-mt-3 text-xs text-mute">Не удалось загрузить фото по этой ссылке.</p>}
       {error && <p role="alert" className="rounded-xl border border-danger px-4 py-3 text-sm text-danger">{error}</p>}
       <Button disabled={save.isPending}>{save.isPending ? 'Сохраняем…' : 'Сохранить'}</Button>
     </form>

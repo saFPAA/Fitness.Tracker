@@ -23,6 +23,36 @@ export function isHttpUrl(v: string): boolean {
 
 export const safeHttpUrl = (v: string | null | undefined) => (v && isHttpUrl(v) ? v : null)
 
+/** Extract a video ID from supported YouTube URL formats. */
+export function youtubeVideoId(value: string | null | undefined): string | null {
+  const safeUrl = safeHttpUrl(value)
+  if (!safeUrl) return null
+
+  try {
+    const url = new URL(safeUrl)
+    const host = url.hostname.toLowerCase().replace(/^www\./, '')
+    let id: string | null = null
+
+    if (host === 'youtu.be') {
+      id = url.pathname.split('/').filter(Boolean)[0] ?? null
+    } else if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
+      const parts = url.pathname.split('/').filter(Boolean)
+      if (url.pathname === '/watch') id = url.searchParams.get('v')
+      else if (['embed', 'shorts', 'live'].includes(parts[0] ?? '')) id = parts[1] ?? null
+    }
+
+    return id && /^[\w-]{11}$/.test(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
+/** Convert supported YouTube links into a privacy-enhanced embed URL. */
+export function youtubeEmbedUrl(value: string | null | undefined): string | null {
+  const id = youtubeVideoId(value)
+  return id ? `https://www.youtube-nocookie.com/embed/${id}?rel=0` : null
+}
+
 export function plural(n: number, forms: [string, string, string]): string {
   const m = Math.abs(n) % 100
   const d = m % 10

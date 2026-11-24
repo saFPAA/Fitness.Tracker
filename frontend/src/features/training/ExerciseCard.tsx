@@ -78,14 +78,15 @@ export default function ExerciseCard({
   const summary = sets.map((s) => `${s.repsDone}×${fmtWeight(s.weight)}`).join(' · ')
 
   return (
-    <section className="rounded-2xl border border-line bg-surface">
+    <section className="overflow-hidden rounded-2xl border border-line bg-surface">
       <button
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex min-h-16 w-full items-center gap-3 p-4 text-left active:opacity-70"
+        className="flex min-h-[4.5rem] w-full items-center gap-3 p-4 text-left active:opacity-70"
       >
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-bg text-accent" aria-hidden="true">◉</span>
         <div className="min-w-0 flex-1">
-          <h2 className={`text-lg leading-snug font-semibold ${expanded ? 'break-words' : 'truncate'}`}>
+          <h2 className={`text-base leading-snug font-semibold tracking-tight ${expanded ? 'break-words' : 'truncate'}`}>
             {exercise?.name ?? `Упражнение #${we.exerciseId}`}
           </h2>
           {exercise && (
