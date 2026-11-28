@@ -3,6 +3,7 @@ package com.Author.Fitness.Exercise;
 import com.Author.Fitness.Exercise.dto.CreateExerciseRequest;
 import com.Author.Fitness.Exercise.dto.ExerciseResponse;
 import com.Author.Fitness.Exercise.dto.UpdateExerciseRequest;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -12,6 +13,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RequestMapping("/api/exercise")
 public class ExerciseController {

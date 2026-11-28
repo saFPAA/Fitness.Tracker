@@ -1,0 +1,6 @@
+springdoc:
+  paths-to-match: /api/**
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true

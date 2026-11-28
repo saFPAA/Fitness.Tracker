@@ -6,6 +6,7 @@ import com.Author.Fitness.Security.CustomUserDetails;
 import com.Author.Fitness.User.dto.ChangePasswordRequest;
 import com.Author.Fitness.User.dto.CreateUserRequest;
 import com.Author.Fitness.User.dto.UserResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RequestMapping("/api/user")
 public class UserController {

@@ -4,6 +4,7 @@ import com.Author.Fitness.Security.CustomUserDetails;
 import com.Author.Fitness.WorkoutExercise.dto.CreateWorkoutExerciseRequest;
 import com.Author.Fitness.WorkoutExercise.dto.UpdateWorkoutExerciseRequest;
 import com.Author.Fitness.WorkoutExercise.dto.WorkoutExerciseResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RequestMapping("/api/workout-exercise")
 public class WorkoutExerciseController {

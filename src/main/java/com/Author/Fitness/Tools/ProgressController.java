@@ -2,6 +2,7 @@ package com.Author.Fitness.Tools;
 
 import com.Author.Fitness.Security.CustomUserDetails;
 import com.Author.Fitness.WorkoutSet.dto.WorkoutSetResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RequestMapping("/api/progress")
 public class ProgressController {

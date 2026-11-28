@@ -109,7 +109,7 @@ docker compose up -d db redis
 export DB_URL=jdbc:postgresql://localhost:5433/fitness_db
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
-./mvnw spring-boot:run
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 Также должны быть заданы `DB_USERNAME`, `DB_PASSWORD` и `JWT_SECRET`. Backend запускается на порту `8080`.
@@ -133,6 +133,27 @@ Vite использует proxy для `/api` и отправляет запро
 ```http
 Authorization: Bearer <accessToken>
 ```
+
+### Проверка через Swagger UI
+
+Профиль `dev` открывает [Swagger UI](http://localhost:8080/swagger-ui.html) и [спецификацию OpenAPI](http://localhost:8080/v3/api-docs) на порту Spring Boot. При запуске из IDE задай `SPRING_PROFILES_ACTIVE=dev`. При обычном запуске документация отключена.
+
+1. В Swagger UI вызови `POST /api/auth/register` с новым логином или `POST /api/auth/login` для существующего аккаунта. Нажми **Authorize** и вставь значение `accessToken` без префикса `Bearer`.
+2. Возьми ID своего пользователя из поля `userId` в полезной нагрузке access-токена, декодировав её локально. Создай тренировку через `POST /api/workout`, передав `userId`, `name` и `date` в формате `YYYY-MM-DD`. Запомни `id` из ответа.
+3. Возьми `id` упражнения из каталога (`GET /api/exercise`). Добавь его в тренировку через `POST /api/workout-exercise`, передав `workoutId`, `exerciseId` и `orderIndex: 1`. ID из ответа — это `workoutExerciseId`.
+4. Дважды вызови `POST /api/workout-set` с одинаковым телом. Подставь свой `workoutExerciseId` и новый UUID в `requestId`.
+
+   ```json
+   {
+     "workoutExerciseId": 42,
+     "position": 1,
+     "repsDone": 10,
+     "weight": 60.25,
+     "requestId": "5a70817a-1f14-4c30-83dc-cff270165cdd"
+   }
+   ```
+
+   Оба запроса возвращают `200` и один и тот же `id` подхода. В `GET /api/workout-set/workout-exercise/{workoutExerciseId}` будет один подход. Если повторить запрос с тем же `requestId`, но изменить `repsDone`, API вернёт `409 Conflict`.
 
 ### Авторизация
 
