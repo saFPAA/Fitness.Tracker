@@ -1,122 +1,59 @@
 # Fitness Tracker
 
-PWA-приложение для ведения дневника тренировок и отслеживания прогресса. Пользователь создаёт тренировки, добавляет упражнения и записывает подходы; каталог упражнений можно фильтровать и пополнять.
+Веб-приложение для силовых тренировок. В нём можно составить тренировку из каталога упражнений, записывать вес и повторы, следить за историей и повторять удачные тренировки. Интерфейс рассчитан на телефон и поддерживает установку как PWA.
 
-## Возможности
+- **Во время тренировки** доступны изменение порядка упражнений и таймер отдыха.
+- **При потере связи** операции с подходами сохраняются на устройстве и отправляются после восстановления соединения.
+- **Для анализа прогресса** доступна история подходов по упражнению и сравнение результатов с предыдущими тренировками.
 
-- Регистрация и вход по логину и паролю.
-- JWT access-токен и refresh-токен; выход и ротация refresh-токенов.
-- Создание, редактирование и удаление тренировок.
-- Каталог упражнений с поиском, фильтрацией по группе мышц, описанием и ссылками на видео и изображения.
-- Запись упражнений и подходов в тренировке.
-- История и показатели прогресса по упражнению.
-- Роли `USER` и `ADMIN`; пользовательские данные доступны владельцу и администратору.
-- Администратор может управлять общим каталогом упражнений.
-- Ограничение частоты входа, регистрации и неудачной смены пароля через Redis.
-- Устанавливаемое PWA с офлайн-очередью изменений подходов и синхронизацией при восстановлении связи.
+## Быстрый запуск
 
-Регистрация создаёт пользователя и сразу выполняет вход. Подтверждение адреса электронной почты, восстановление пароля по email и изменение логина или email сейчас не реализованы.
-
-## Стек
-
-| Компонент | Технологии |
-| --- | --- |
-| Backend | Java 21, Spring Boot 4, Spring MVC, Spring Data JPA, Spring Security, Bean Validation |
-| База данных | PostgreSQL 17, Flyway |
-| Ограничение запросов | Redis 7 |
-| Авторизация | JWT, BCrypt, refresh-токены с хранением SHA-256 хэша |
-| Frontend | React 19, TypeScript, Vite, React Router, TanStack Query, Tailwind CSS |
-| Тесты | JUnit 5, Mockito, Spring Boot Test, Testcontainers, Vitest |
-| Запуск | Maven Wrapper, npm, Docker Compose |
-
-## Структура
-
-```text
-src/main/java/com/Author/Fitness/
-├── Auth/             Регистрация, вход и управление токенами
-├── Security/         JWT, правила доступа и Redis rate limiting
-├── User/             Пользователи, профиль и смена пароля
-├── Exercise/         Каталог упражнений
-├── Workout/          Тренировки
-├── WorkoutExercise/  Упражнения в тренировках
-├── WorkoutSet/       Подходы
-└── Tools/            Прогресс и служебные настройки
-
-src/main/resources/db/migration/  Миграции Flyway
-src/test/java/                    Backend-тесты
-frontend/src/                     Страницы, компоненты, API и PWA
-```
-
-## Быстрый запуск через Docker Compose
-
-Нужны Docker Engine и Docker Compose v2.
-
-1. Создай в корне проекта файл `.env`:
-
-   ```dotenv
-   DB_USERNAME=fitness_db
-   DB_PASSWORD=замени-на-сильный-пароль
-   DB_URL=jdbc:postgresql://db:5432/fitness_db
-   JWT_SECRET=вставь-длинный-случайный-секрет
-   ```
-
-2. Сгенерируй секрет JWT:
-
-   ```bash
-   openssl rand -base64 48
-   ```
-
-   Вставь результат в `JWT_SECRET`. Файл `.env` не следует добавлять в Git.
-
-3. Из корня проекта собери и запусти приложение:
-
-   ```bash
-   docker compose up -d --build
-   ```
-
-Compose запустит PostgreSQL, Redis и приложение. Flyway применит миграции при старте. Frontend встроен в backend-образ, поэтому приложение будет доступно по адресу [http://localhost:8080](http://localhost:8080).
-
-Проверить состояние контейнеров и посмотреть логи:
+Нужны Docker с Compose и OpenSSL для генерации локальных ключей. Выполняйте команды из корня репозитория в Bash. Если `.env` уже существует, используйте его и проверьте значения по примеру ниже.
 
 ```bash
-docker compose ps
-docker compose logs -f app
+if [ ! -f .env ]; then
+  (
+    umask 077
+    cat > .env <<ENV
+DB_URL=jdbc:postgresql://db:5432/fitness_db
+DB_USERNAME=fitness
+DB_PASSWORD=$(openssl rand -hex 16)
+JWT_SECRET=$(openssl rand -hex 32)
+ENV
+  )
+fi
+
+docker compose up --build -d
 ```
 
-Остановить приложение:
+Откройте [http://localhost:8080](http://localhost:8080), зарегистрируйтесь и создайте первую тренировку. Стартовый каталог упражнений заполняется миграцией Flyway. Состояние контейнеров можно проверить командой `docker compose ps`.
 
-```bash
-docker compose down
-```
-
-Данные PostgreSQL сохраняются в Docker-томе `pgdata`. Команда `docker compose down -v` удаляет этот том вместе с данными.
-
-> Текущий Compose публикует приложение только на localhost. Это конфигурация для локального запуска, не для непосредственного публичного размещения в интернете.
+Для остановки используйте `docker compose down`. 
 
 ## Локальная разработка
 
-### Backend
-
-Запусти PostgreSQL и Redis в контейнерах:
+Нужны JDK 21, Maven, Node.js 22.12+ из ветки 22.x и Docker Compose. Создайте `.env` по примеру выше. Если весь стек уже запущен через Compose, остановите контейнер приложения, чтобы освободить порт 8080.
 
 ```bash
-docker compose up -d db redis
+docker compose stop app
+docker compose up -d --wait db redis
 ```
 
-Задай переменные из `.env` в конфигурации запуска IDE или терминале. Для backend, работающего на хосте, укажи адреса опубликованных сервисов:
+Из корня репозитория запустите Spring Boot. Этот пример использует `.env`, созданный командой выше.
 
 ```bash
-export DB_URL=jdbc:postgresql://localhost:5433/fitness_db
-export REDIS_HOST=localhost
-export REDIS_PORT=6379
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+(
+  set -a
+  . ./.env
+  set +a
+  export DB_URL=jdbc:postgresql://localhost:5433/fitness_db
+  export REDIS_HOST=localhost
+  export REDIS_PORT=6379
+  mvn spring-boot:run -Dspring-boot.run.profiles=dev
+)
 ```
 
-Также должны быть заданы `DB_USERNAME`, `DB_PASSWORD` и `JWT_SECRET`. Backend запускается на порту `8080`.
-
-### Frontend
-
-Нужен Node.js 22 или новее. Установи зависимости и запусти Vite:
+В другом терминале запустите React.
 
 ```bash
 cd frontend
@@ -124,24 +61,36 @@ npm ci
 npm run dev
 ```
 
-Vite использует proxy для `/api` и отправляет запросы на backend по адресу `http://localhost:8080`.
+Откройте [http://localhost:5173](http://localhost:5173). Vite проксирует запросы `/api/**` в Spring Boot на порту 8080. В Docker собранный фронтенд раздаёт сам Spring с того же адреса, что и REST API.
 
-## API
+| Параметр | Назначение |
+| --- | --- |
+| `DB_URL` | JDBC-адрес PostgreSQL. В Compose используется `db:5432`, при запуске Spring на хосте  `localhost:5433`. |
+| `DB_USERNAME`, `DB_PASSWORD` | Учётные данные PostgreSQL. |
+| `JWT_SECRET` | Ключ подписи JWT. Для HS256 требуется не менее 32 байт. |
+| `REDIS_HOST`, `REDIS_PORT` | Адрес Redis. В Compose приложение использует `redis:6379`, при запуске на хосте  `localhost:6379`. |
 
-Все маршруты `/api/**`, кроме `/api/auth/**`, требуют access-токен:
+## REST API
 
-```http
-Authorization: Bearer <accessToken>
-```
+В профиле `dev` доступны [Swagger UI](http://localhost:8080/swagger-ui.html) и [спецификация OpenAPI](http://localhost:8080/v3/api-docs). При обычном запуске документация отключена.
 
-### Проверка через Swagger UI
+| Группа | Примеры маршрутов |
+| --- | --- |
+| Авторизация | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout` |
+| Профиль | `GET /api/user/{id}`, `PATCH /api/user/me/password` |
+| Каталог | `GET /api/exercise`, `GET /api/exercise/search` |
+| Тренировки | `POST /api/workout`, `GET /api/workout/{id}`, `GET /api/workout/user/{userId}` |
+| Упражнения в тренировке | `POST /api/workout-exercise`, `GET /api/workout-exercise/workout/{workoutId}` |
+| Подходы и прогресс | `POST /api/workout-set`, `GET /api/workout-set/workout-exercise/{workoutExerciseId}`, `GET /api/progress?userId=…&exerciseId=…` |
 
-Профиль `dev` открывает [Swagger UI](http://localhost:8080/swagger-ui.html) и [спецификацию OpenAPI](http://localhost:8080/v3/api-docs) на порту Spring Boot. При запуске из IDE задай `SPRING_PROFILES_ACTIVE=dev`. При обычном запуске документация отключена.
+Защищённые маршруты `/api/**` требуют заголовок `Authorization: Bearer <accessToken>`. Маршруты `/api/auth/**` доступны без access-токена. Доступ к тренировкам ограничен владельцем и администратором. Изменение общего каталога упражнений требует роли `ADMIN`.
 
-1. В Swagger UI вызови `POST /api/auth/register` с новым логином или `POST /api/auth/login` для существующего аккаунта. Нажми **Authorize** и вставь значение `accessToken` без префикса `Bearer`.
-2. Возьми ID своего пользователя из поля `userId` в полезной нагрузке access-токена, декодировав её локально. Создай тренировку через `POST /api/workout`, передав `userId`, `name` и `date` в формате `YYYY-MM-DD`. Запомни `id` из ответа.
-3. Возьми `id` упражнения из каталога (`GET /api/exercise`). Добавь его в тренировку через `POST /api/workout-exercise`, передав `workoutId`, `exerciseId` и `orderIndex: 1`. ID из ответа — это `workoutExerciseId`.
-4. Дважды вызови `POST /api/workout-set` с одинаковым телом. Подставь свой `workoutExerciseId` и новый UUID в `requestId`.
+### Проверка повторной отправки подхода
+
+1. В Swagger UI вызовите `POST /api/auth/register` или `POST /api/auth/login`. В **Authorize** вставьте `accessToken` без префикса `Bearer`.
+2. Возьмите `userId` из полезной нагрузки JWT, декодировав её локально. Вызовите `POST /api/workout` с полями `userId`, `name` и `date` в формате `YYYY-MM-DD`.
+3. Выберите упражнение через `GET /api/exercise`. Добавьте его через `POST /api/workout-exercise`, передав `workoutId`, `exerciseId` и `orderIndex: 1`. Из ответа возьмите `id` для поля `workoutExerciseId`.
+4. Дважды вызовите `POST /api/workout-set` с одинаковым телом. Подставьте полученный `workoutExerciseId` и новый UUID в `requestId`.
 
    ```json
    {
@@ -153,111 +102,34 @@ Authorization: Bearer <accessToken>
    }
    ```
 
-   Оба запроса возвращают `200` и один и тот же `id` подхода. В `GET /api/workout-set/workout-exercise/{workoutExerciseId}` будет один подход. Если повторить запрос с тем же `requestId`, но изменить `repsDone`, API вернёт `409 Conflict`.
+   Оба запроса вернут `200 OK` с одним и тем же ID подхода. Запрос списка подходов покажет одну запись. Повтор с тем же `requestId` и изменённым `repsDone` вернёт `409 Conflict`.
 
-### Авторизация
+## Архитектура
 
-| Метод | Маршрут | Назначение |
-| --- | --- | --- |
-| `POST` | `/api/auth/register` | Создать аккаунт и войти |
-| `POST` | `/api/auth/login` | Войти |
-| `POST` | `/api/auth/refresh` | Ротировать refresh-токен и получить новую пару токенов |
-| `POST` | `/api/auth/logout` | Отозвать refresh-токен |
+- [Бэкенд](src/main/java/com/Author/Fitness): Java 21, Spring Boot, Spring MVC, Spring Security и Spring Data JPA. Код сгруппирован по предметным областям. Контроллеры принимают запросы, сервисы проверяют доступ и выполняют операции, репозитории работают с данными, а MapStruct преобразует сущности и DTO.
+- [Фронтенд](frontend/src): React, TypeScript, Vite, Tailwind CSS и TanStack Query. 
+- [Данные и миграции](src/main/resources/db/migration): PostgreSQL хранит тренировки, подходы, хеши refresh-токенов и результаты запросов на создание подходов. Flyway применяет миграции при старте. Redis используется для счётчиков ограничения попыток входа, регистрации и смены пароля.
+- [Сборка контейнера](Dockerfile): отдельные этапы собирают React и Spring Boot. Статика фронтенда включается в JAR. Spring отдаёт `index.html` для клиентских маршрутов, поэтому прямые переходы на страницы тренировок работают и после обновления страницы.
 
-Регистрация принимает логин, email и пароль:
+## Тесты и CI
 
-```json
-{
-  "username": "alex",
-  "email": "alex@example.com",
-  "password": "password123"
-}
-```
-
-Успешная регистрация и вход возвращают `accessToken` и `refreshToken`.
-
-### Пользователи и профиль
-
-| Метод | Маршрут | Доступ | Назначение |
-| --- | --- | --- | --- |
-| `GET` | `/api/user/{id}` | Владелец или администратор | Получить профиль |
-| `POST` | `/api/user` | Администратор | Создать пользователя с ролью USER |
-| `PATCH` | `/api/user/me/password` | Авторизованный пользователь | Сменить пароль, указав текущий |
-| `DELETE` | `/api/user/{id}` | Владелец или администратор | Удалить аккаунт |
-
-### Каталог упражнений
-
-| Метод | Маршрут | Доступ | Назначение |
-| --- | --- | --- | --- |
-| `GET` | `/api/exercise` | Авторизованный пользователь | Получить страницу каталога |
-| `GET` | `/api/exercise/{id}` | Авторизованный пользователь | Получить упражнение |
-| `GET` | `/api/exercise/search?name=...` | Авторизованный пользователь | Найти упражнения по названию |
-| `GET` | `/api/exercise/muscle-group/{muscleGroup}` | Авторизованный пользователь | Фильтровать по группе мышц |
-| `POST` | `/api/exercise` | Администратор | Добавить упражнение |
-| `PUT` | `/api/exercise/{id}` | Администратор | Изменить упражнение |
-| `DELETE` | `/api/exercise/{id}` | Администратор | Удалить упражнение |
-
-Для постраничных запросов каталога используются параметры `pageNumber` (начиная с 0) и `pageSize` (от 1 до 100).
-
-### Тренировки и подходы
-
-| Метод | Маршрут | Назначение |
-| --- | --- | --- |
-| `GET` | `/api/workout/{id}` | Получить тренировку |
-| `GET` | `/api/workout/user/{userId}` | Получить тренировки пользователя; поддерживает `pageNumber` и `pageSize` |
-| `POST` | `/api/workout` | Создать тренировку |
-| `PUT` | `/api/workout/{id}` | Изменить тренировку |
-| `DELETE` | `/api/workout/{id}` | Удалить тренировку |
-| `GET` | `/api/workout-exercise/{id}` | Получить упражнение из тренировки |
-| `GET` | `/api/workout-exercise/workout/{workoutId}` | Получить упражнения тренировки |
-| `POST` | `/api/workout-exercise` | Добавить упражнение в тренировку |
-| `PUT` | `/api/workout-exercise/{id}` | Изменить порядок упражнений |
-| `DELETE` | `/api/workout-exercise/{id}` | Убрать упражнение из тренировки |
-| `GET` | `/api/workout-set/{id}` | Получить подход |
-| `GET` | `/api/workout-set/workout-exercise/{workoutExerciseId}` | Получить подходы упражнения |
-| `POST` | `/api/workout-set` | Добавить подход |
-| `PUT` | `/api/workout-set/{id}` | Изменить подход |
-| `DELETE` | `/api/workout-set/{id}` | Удалить подход |
-
-### Прогресс
-
-| Метод | Маршрут | Назначение |
-| --- | --- | --- |
-| `GET` | `/api/progress?userId={id}&exerciseId={id}` | Получить историю подходов пользователя по упражнению |
-
-## Данные и миграции
-
-Flyway запускает SQL-файлы из `src/main/resources/db/migration` по порядку версий. Начальный каталог упражнений и связи удаления данных заданы в миграции `V3__cascade_and_seed.sql`.
-
-Не изменяй уже применённые миграции: для последующих изменений схемы или стартовых данных добавляй новую миграцию с очередной версией.
-
-Основные связи: тренировка принадлежит пользователю; упражнения и подходы принадлежат тренировке. При удалении пользователя удаляются его тренировки, а вместе с ними упражнения тренировок и подходы. Записи общего каталога упражнений удаляются отдельно.
-
-## Авторизация и безопасность
-
-- Access JWT действует 15 минут; refresh-токен — 7 дней.
-- При обновлении refresh-токен одноразово ротируется. В базе хранится только его SHA-256 хэш.
-- Пароли хранятся с BCrypt, а не в открытом виде.
-- Длина пароля: минимум 8 символов и не более 72 байт в UTF-8.
-- Redis ограничивает попытки входа, регистрации и неудачной смены пароля. Лимиты задаются в `src/main/resources/application.yaml`.
-- Если Redis недоступен, приложение продолжает обслуживать запросы без применения rate limits.
-
-## Тесты и сборка
-
-Backend-тесты:
+Бэкенд. Запускайте из корня репозитория с доступным Docker.
 
 ```bash
-./mvnw test
+mvn -B verify
 ```
 
-Интеграционные тесты используют Testcontainers; для них должен быть запущен Docker.
+Интеграционные тесты поднимают собственные PostgreSQL и Redis через Testcontainers. Уже запущенный стек Compose и его `.env` для тестов не нужны. Проверки охватывают авторизацию, права доступа и повторное создание подходов.
 
-Frontend-тесты и production-сборка:
+Фронтенд. Из корня репозитория выполните следующее.
 
 ```bash
 cd frontend
+npm ci
 npm test
 npm run build
 ```
 
-`npm run build` проверяет TypeScript и собирает frontend в `frontend/dist`.
+Vitest проверяет, в частности, синхронизацию офлайн-очереди. Команда `npm run build` отдельно проверяет типы и собирает PWA.
+
+[GitHub Actions](.github/workflows/ci.yml) запускает бэкенд и фронтенд в двух заданиях при push в `main` или `fresh-main`, а также при pull request в `main`. Workflow можно запустить вручную через вкладку **Actions**.
