@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import type { WorkoutExerciseDetails } from '../../api/types'
-import { Button, Sheet } from '../../components/ui'
+import type { Exercise, WorkoutExercise } from '../../api/types'
+import { Button, ErrorState, Sheet, Skeleton } from '../../components/ui'
 import Stepper from '../../components/Stepper'
 import { fmtWeight, fromInput, groupDot, plural, toInput } from '../../lib/format'
 import { overlaySets, type DisplaySet } from '../../lib/queueLogic'
 import { recordOf } from '../../lib/training'
 import { useQueueOps } from '../sync/online'
 import SetEditSheet from './SetEditSheet'
-import { usePreviousWorkout, useRemoveExercise } from './hooks'
+import { previousSession, useProgress, useRemoveExercise, useSets } from './hooks'
 import { useSetActions } from './setActions'
 
 const msg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
@@ -15,16 +15,21 @@ const SETS: [string, string, string] = ['подход', 'подхода', 'по�
 
 export default function ExerciseCard({
   we,
+  exercise,
+  siblingIds,
   expanded,
   onToggle,
   onLogged,
 }: {
-  we: WorkoutExerciseDetails
+  we: WorkoutExercise
+  exercise: Exercise | undefined
+  siblingIds: number[] // все упражнения этой тренировки с тем же exerciseId
   expanded: boolean
   onToggle: () => void
   onLogged: () => void
 }) {
-  const history = usePreviousWorkout(we.exerciseId, we.workoutId, expanded)
+  const setsQ = useSets(we.id)
+  const progressQ = useProgress(we.exerciseId, expanded) // у свёрнутых карточек историю не грузим
   const actions = useSetActions(we.id)
   const ops = useQueueOps()
   const remove = useRemoveExercise(we.workoutId)
@@ -36,8 +41,10 @@ export default function ExerciseCard({
   const [record, setRecord] = useState<string | null>(null)
 
   // сохранённые подходы плюс ещё не отправленные изменения из очереди
-  const sets = overlaySets(we.sets, ops, we.id)
-  const prev = history.data?.sessions[0]?.sets ?? []
+  const serverSets = setsQ.data ?? []
+  const sets = overlaySets(serverSets, ops, we.id)
+  const past = (progressQ.data ?? []).filter((s) => !siblingIds.includes(s.workoutExerciseId))
+  const prev = previousSession(progressQ.data ?? [], siblingIds)
 
   // Подсказка: последний подход этой тренировки, иначе первый подход прошлой сессии
   const last = sets[sets.length - 1]
@@ -54,7 +61,7 @@ export default function ExerciseCard({
     if (reps.trim() === '' || !Number.isInteger(r) || r < 0) return setError('Укажите число повторов')
     if (!Number.isFinite(w) || w < 0) return setError('Некорректный вес')
     // рекорд сравниваем с прошлыми тренировками и уже записанными подходами; без загруженной истории не сравниваем
-    const kind = history.isSuccess ? recordOf(sets, r, w, history.data) : null
+    const kind = progressQ.isSuccess ? recordOf([...past, ...sets], r, w) : null
     try {
       actions.addSet({ position: sets.reduce((m, s) => Math.max(m, s.position), 0) + 1, repsDone: r, weight: w })
       setDraft({ reps: String(r), weight: toInput(w) })
@@ -77,12 +84,12 @@ export default function ExerciseCard({
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-bg text-accent" aria-hidden="true">◉</span>
         <div className="min-w-0 flex-1">
           <h2 className={`text-base leading-snug font-semibold tracking-tight ${expanded ? 'break-words' : 'truncate'}`}>
-            {we.name}
+            {exercise?.name ?? `Упражнение #${we.exerciseId}`}
           </h2>
-          {we.muscleGroup && (
+          {exercise && (
             <p className="mt-0.5 flex items-center gap-2 text-sm text-mute">
-              <span className={`size-2.5 rounded-full ${groupDot(we.muscleGroup)}`} aria-hidden="true" />
-              {we.muscleGroup}
+              <span className={`size-2.5 rounded-full ${groupDot(exercise.muscleGroup)}`} aria-hidden="true" />
+              {exercise.muscleGroup}
             </p>
           )}
           {!expanded && sets.length > 0 && (
@@ -111,7 +118,9 @@ export default function ExerciseCard({
           )}
 
           <div className="mt-2">
-            {sets.length === 0 && <p className="py-2 text-sm text-mute">Подходов пока нет.</p>}
+            {setsQ.isPending && <Skeleton className="h-12" />}
+            {setsQ.isError && <ErrorState message={setsQ.error.message} onRetry={() => void setsQ.refetch()} />}
+            {setsQ.isSuccess && sets.length === 0 && <p className="py-2 text-sm text-mute">Подходов пока нет.</p>}
             <ul>
               {sets.map((s, i) => (
                 <li key={s.id} className="border-t border-line first:border-t-0">
@@ -145,7 +154,7 @@ export default function ExerciseCard({
                 ★ {record}
               </p>
             )}
-            <Button onClick={log}>
+            <Button onClick={log} disabled={setsQ.isPending}>
               Записать подход {sets.length + 1}
             </Button>
           </div>

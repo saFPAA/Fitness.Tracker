@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQueries } from '@tanstack/react-query'
+import { trainingApi } from '../api/training'
 import { Button, ErrorState, Sheet, Skeleton } from '../components/ui'
 import AddExerciseSheet from '../features/training/AddExerciseSheet'
 import StatusBar from '../features/sync/StatusBar'
 import ReorderSheet from '../features/training/ReorderSheet'
 import ExerciseCard from '../features/training/ExerciseCard'
 import { RestTimerBar, useRestTimer } from '../features/training/RestTimer'
-import { useAddExercise } from '../features/training/hooks'
+import { useAddExercise, useCatalog, useWorkoutExercises } from '../features/training/hooks'
 import EditWorkoutSheet from '../features/workouts/EditWorkoutSheet'
-import { useDeleteWorkout, useRepeatWorkout, useWorkoutDetails } from '../features/workouts/hooks'
+import { useDeleteWorkout, useRepeatWorkout, useWorkout } from '../features/workouts/hooks'
 import { fullDate } from '../lib/dates'
+import { keepStale } from '../lib/keepStale'
 import { plural } from '../lib/format'
 import { getRestSeconds } from '../lib/settings'
 import { useBack } from '../lib/useBack'
@@ -19,7 +22,9 @@ export default function WorkoutPage() {
   const id = Number(useParams().id)
   const navigate = useNavigate()
   const back = useBack()
-  const q = useWorkoutDetails(id)
+  const q = useWorkout(id)
+  const exQ = useWorkoutExercises(id)
+  const catalog = useCatalog()
   const addExercise = useAddExercise(id)
   const del = useDeleteWorkout()
   const repeat = useRepeatWorkout()
@@ -32,12 +37,20 @@ export default function WorkoutPage() {
   // undefined — пользователь ещё не выбирал, работает выбор по умолчанию; null — всё свёрнуто
   const [openId, setOpenId] = useState<number | null | undefined>(undefined)
 
-  const exercises = q.data?.exercises ?? []
-  const setCount = exercises.reduce((total, exercise) => total + exercise.sets.length, 0)
+  const exercises = exQ.data ?? []
+  const byId = new Map((catalog.data ?? []).map((e) => [e.id, e]))
 
-  // По умолчанию раскрыто первое упражнение без подходов, а если все начаты, последнее.
-  const firstEmpty = exercises.find((exercise) => exercise.sets.length === 0)
-  const defaultOpen = (firstEmpty ?? exercises[exercises.length - 1])?.id ?? null
+  // Подходы всех упражнений: нужны для итогов и для выбора раскрытого упражнения.
+  // Ключи те же, что у useSets в карточках, поэтому запросы общие.
+  const setsQs = useQueries({
+    queries: exercises.map((we) => ({ queryKey: ['sets', we.id], queryFn: keepStale(() => trainingApi.setsOf(we.id)) })),
+  })
+  const allLoaded = exQ.isSuccess && setsQs.every((r) => r.isSuccess)
+  const allSets = allLoaded ? setsQs.flatMap((r) => r.data ?? []) : []
+
+  // По умолчанию раскрыто первое упражнение без подходов, а если все начаты, последнее
+  const firstEmpty = exercises.find((_, i) => setsQs[i]?.data?.length === 0)
+  const defaultOpen = allLoaded ? (firstEmpty ?? exercises[exercises.length - 1])?.id ?? null : null
   const open = openId === undefined ? defaultOpen : openId
 
   const remove = async () => {
@@ -78,17 +91,17 @@ export default function WorkoutPage() {
 
       {q.isSuccess && (
         <>
-          <p className="page-kicker mt-2">ТРЕНИРОВКА · {fullDate(q.data.workout.date)}</p>
-          <h1 className="page-title break-words">{q.data.workout.name}</h1>
+          <p className="page-kicker mt-2">ТРЕНИРОВКА · {fullDate(q.data.date)}</p>
+          <h1 className="page-title break-words">{q.data.name}</h1>
           <button onClick={() => setEditingMeta(true)} className="-ml-2 mt-1 min-h-10 px-2 text-xs font-semibold text-accent">
             Изменить название и дату
           </button>
 
-          {setCount > 0 && (
+          {allSets.length > 0 && (
             <dl className="mt-4 grid grid-cols-2 gap-2 text-center">
               {[
                 [exercises.length, plural(exercises.length, ['упражнение', 'упражнения', 'упражнений'])],
-                [setCount, plural(setCount, ['подход', 'подхода', 'подходов'])],
+                [allSets.length, plural(allSets.length, ['подход', 'подхода', 'подходов'])],
               ].map(([value, label]) => (
                 <div key={label} className="metric-tile rounded-2xl px-2 py-3">
                   <dd className="num text-2xl font-bold text-accent">{value}</dd>
@@ -113,7 +126,9 @@ export default function WorkoutPage() {
           )}
 
           <div className="mt-6 flex flex-col gap-3">
-            {exercises.length === 0 && (
+            {exQ.isPending && <Skeleton className="h-20" />}
+            {exQ.isError && <ErrorState message={exQ.error.message} onRetry={() => void exQ.refetch()} />}
+            {exQ.isSuccess && exercises.length === 0 && (
               <p className="rounded-2xl border border-dashed border-line bg-surface/40 px-4 py-10 text-center text-mute">
                 Добавь первое упражнение — и начни фиксировать подходы.
               </p>
@@ -122,6 +137,8 @@ export default function WorkoutPage() {
               <ExerciseCard
                 key={we.id}
                 we={we}
+                exercise={byId.get(we.exerciseId)}
+                siblingIds={exercises.filter((e) => e.exerciseId === we.exerciseId).map((e) => e.id)}
                 expanded={open === we.id}
                 onToggle={() => setOpenId(open === we.id ? null : we.id)}
                 onLogged={() => {
@@ -132,7 +149,7 @@ export default function WorkoutPage() {
             ))}
           </div>
 
-          <Button onClick={() => setPicker(true)} className="mt-4 w-full">
+          <Button onClick={() => setPicker(true)} className="mt-4 w-full" disabled={!exQ.isSuccess}>
             Добавить упражнение
           </Button>
           {exercises.length > 1 && (
@@ -149,19 +166,19 @@ export default function WorkoutPage() {
             open={picker}
             onClose={() => setPicker(false)}
             onPick={async (e) => {
-              const created = await addExercise.mutateAsync(e)
+              const created = await addExercise.mutateAsync(e.id)
               setOpenId(created.id) // новое упражнение сразу раскрыто, остальные сворачиваются
             }}
           />
 
-          <EditWorkoutSheet open={editingMeta} onClose={() => setEditingMeta(false)} workout={q.data.workout} />
+          <EditWorkoutSheet open={editingMeta} onClose={() => setEditingMeta(false)} workout={q.data} />
 
           <ReorderSheet
             open={ordering}
             onClose={() => setOrdering(false)}
             workoutId={id}
             exercises={exercises}
-            labels={new Map(exercises.map((we) => [we.id, we.name]))}
+            labels={new Map(exercises.map((we) => [we.id, byId.get(we.exerciseId)?.name ?? `Упражнение #${we.exerciseId}`]))}
           />
 
           <Sheet
@@ -173,7 +190,7 @@ export default function WorkoutPage() {
             title="Удалить тренировку?"
           >
             <p className="text-mute">
-              «{q.data.workout.name}» будет удалена вместе со всеми упражнениями и подходами. Это нельзя отменить.
+              «{q.data.name}» будет удалена вместе со всеми упражнениями и подходами. Это нельзя отменить.
             </p>
             {del.isError && (
               <p role="alert" className="mt-4 rounded-xl border border-danger px-4 py-3 text-sm text-danger">
