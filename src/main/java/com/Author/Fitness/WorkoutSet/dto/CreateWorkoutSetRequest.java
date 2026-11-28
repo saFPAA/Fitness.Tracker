@@ -1,6 +1,7 @@
 package com.Author.Fitness.WorkoutSet.dto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
@@ -20,6 +21,13 @@ public record CreateWorkoutSetRequest(
 
         @NotNull(message = "Weight is required")
         @PositiveOrZero(message = "Weight cannot be negative")
-        BigDecimal weight
+        BigDecimal weight,
+
+        @Pattern(regexp = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                message = "Request ID must be a UUID")
+        String requestId
 ) {
+    public CreateWorkoutSetRequest(Long workoutExerciseId, Integer position, Integer repsDone, BigDecimal weight) {
+        this(workoutExerciseId, position, repsDone, weight, null);
+    }
 }

@@ -7,13 +7,16 @@ import com.Author.Fitness.WorkoutExercise.WorkoutExerciseRepository;
 import com.Author.Fitness.WorkoutSet.dto.CreateWorkoutSetRequest;
 import com.Author.Fitness.WorkoutSet.dto.UpdateWorkoutSetRequest;
 import com.Author.Fitness.WorkoutSet.dto.WorkoutSetResponse;
+import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Slf4j
@@ -24,9 +27,50 @@ public class WorkoutSetService {
     private final WorkoutExerciseRepository workoutExerciseRepository;
     private final WorkoutSetRepository workoutSetRepository;
     private final WorkoutSetMapper mapper;
+    private final JdbcTemplate jdbc;
 
     @Transactional
     public WorkoutSetResponse addSetToExercise(CreateWorkoutSetRequest request, CustomUserDetails currentUser){
+        if (request.requestId() == null) {
+            return createSet(request, currentUser);
+        }
+
+        Long userId = currentUser.getId();
+        UUID requestId = UUID.fromString(request.requestId());
+        // A concurrent retry waits on the unique key until the first transaction commits or rolls back.
+        int reserved = jdbc.update("""
+                INSERT INTO workout_set_creation_requests
+                    (user_id, request_id, workout_exercise_id, set_number, reps_done, weight)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (user_id, request_id) DO NOTHING
+                """, userId, requestId, request.workoutExerciseId(), request.position(),
+                request.repsDone(), request.weight());
+
+        if (reserved == 0) {
+            WorkoutSetResponse original = jdbc.queryForObject("""
+                    SELECT set_id, workout_exercise_id, set_number, reps_done, weight
+                    FROM workout_set_creation_requests WHERE user_id = ? AND request_id = ?
+                    """, (row, index) -> new WorkoutSetResponse(row.getLong("set_id"),
+                    row.getLong("workout_exercise_id"), row.getInt("set_number"), row.getInt("reps_done"),
+                    row.getBigDecimal("weight")), userId, requestId);
+
+            if (!original.workoutExerciseId().equals(request.workoutExerciseId())
+                    || !original.position().equals(request.position())
+                    || !original.repsDone().equals(request.repsDone())
+                    || original.weight().compareTo(request.weight()) != 0) {
+                throw new EntityExistsException("Request ID already used with different set data");
+            }
+            return original;
+        }
+
+        WorkoutSetResponse created = createSet(request, currentUser);
+        jdbc.update("""
+                UPDATE workout_set_creation_requests SET set_id = ? WHERE user_id = ? AND request_id = ?
+                """, created.id(), userId, requestId);
+        return created;
+    }
+
+    private WorkoutSetResponse createSet(CreateWorkoutSetRequest request, CustomUserDetails currentUser) {
 
         WorkoutExerciseEntity workoutExerciseEntity = workoutExerciseRepository
                 .findById(request.workoutExerciseId())

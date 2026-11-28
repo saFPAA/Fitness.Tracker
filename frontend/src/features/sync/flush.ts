@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { ApiError } from '../../api/client'
 import { trainingApi } from '../../api/training'
 import type { WorkoutSet } from '../../api/types'
-import { fresh, patchOp, removeOp } from '../../lib/offlineQueue'
+import { completeAdd, fresh, newRequestId, patchOp, removeOp } from '../../lib/offlineQueue'
 import { findDelivered, isRetryable, type QueueOp } from '../../lib/queueLogic'
 
 const byPosition = (a: WorkoutSet, b: WorkoutSet) => a.position - b.position
@@ -13,22 +13,27 @@ type Outcome = 'done' | 'failed' | 'retry'
 async function attempt(op: QueueOp, qc: QueryClient): Promise<Outcome> {
   try {
     if (op.kind === 'add') {
-      const server = await trainingApi.setsOf(op.weId)
-      if (findDelivered(server, op)) {
-        // прошлая попытка дошла до сервера, хотя ответ потерялся: второй раз не отправляем
-        removeOp(op.opId)
-        qc.setQueryData(setsKey(op.weId), server)
-        return 'done'
+      if (!op.requestId && op.attempted && op.baseIds) {
+        // Только для старых записей, которые отправлялись до появления ключей.
+        const server = await trainingApi.setsOf(op.weId)
+        if (findDelivered(server, op)) {
+          removeOp(op.opId)
+          qc.setQueryData(setsKey(op.weId), server)
+          return 'done'
+        }
       }
-      patchOp(op.opId, { attempted: true, baseIds: server.map((s) => s.id) })
+      const requestId = op.requestId ?? newRequestId()
+      const sent = op.sent ?? { position: op.position, repsDone: op.repsDone, weight: op.weight }
+      if (!op.sent) patchOp(op.opId, { requestId, sent }, true)
       const created = await trainingApi.addSet({
         workoutExerciseId: op.weId,
-        position: op.position,
-        repsDone: op.repsDone,
-        weight: op.weight,
+        requestId,
+        ...sent,
       })
-      removeOp(op.opId)
-      qc.setQueryData<WorkoutSet[]>(setsKey(op.weId), (old) => [...(old ?? server), created].sort(byPosition))
+      completeAdd(op.opId, created.id)
+      qc.setQueryData<WorkoutSet[]>(setsKey(op.weId), (old) =>
+        old?.some((s) => s.id === created.id) ? old : [...(old ?? []), created].sort(byPosition),
+      )
     } else if (op.kind === 'update') {
       const updated = await trainingApi.updateSet(op.setId, {
         position: op.position,

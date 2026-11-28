@@ -13,6 +13,8 @@ interface Set_ { id: number; workoutExerciseId: number; position: number; repsDo
 let server: Set_[] = []
 let nextId = 100
 let posts = 0
+const requests = new Map<string, Set_>()
+let requestIds: string[] = []
 // сценарии сбоев
 let netDown = false // любой запрос падает как «нет связи»
 let dropNextPostResponse = false // сервер выполнит POST, но ответ потеряется
@@ -31,7 +33,18 @@ vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
   if (method === 'POST' && url.endsWith('/api/workout-set')) {
     if (failNextPostWith) { const st = failNextPostWith; failNextPostWith = null; return json(st, { message: 'boom' }) }
     posts++
-    const created = { id: nextId++, ...body }
+    const { requestId, ...fields } = body
+    if (!requestId) return json(400, { message: 'requestId required' })
+    requestIds.push(requestId)
+    const previous = requests.get(requestId)
+    if (previous) {
+      const { id, ...originalFields } = previous
+      return JSON.stringify(fields) === JSON.stringify(originalFields)
+        ? json(200, { id, ...originalFields })
+        : json(409, { message: 'requestId already used' })
+    }
+    const created = { id: nextId++, ...fields }
+    requests.set(requestId, { ...created })
     server.push(created)
     if (dropNextPostResponse) { dropNextPostResponse = false; throw new TypeError('response lost') }
     return json(200, created)
@@ -60,6 +73,8 @@ beforeEach(() => {
   server = []
   nextId = 100
   posts = 0
+  requests.clear()
+  requestIds = []
   netDown = false
   dropNextPostResponse = false
   failNextPostWith = null
@@ -67,8 +82,8 @@ beforeEach(() => {
   queue.bindQueue(1)
 })
 
-const add = (position: number, repsDone: number, weight: number, extra = {}) =>
-  queue.enqueueAdd({ weId: 7, position, repsDone, weight, ...extra })
+const add = (position: number, repsDone: number, weight: number) =>
+  queue.enqueueAdd({ weId: 7, position, repsDone, weight })
 
 describe('отправка очереди', () => {
   it('отправляет накопленные подходы по порядку и очищает очередь', async () => {
@@ -107,8 +122,11 @@ describe('отправка очереди', () => {
     await flushQueue(qc) // POST выполнен на сервере, ответа нет
     expect(server.length).toBe(1)
     expect(queue.fresh().length).toBe(1) // клиент не знает об успехе
-    await flushQueue(qc) // повтор должен заметить доставленный подход
-    expect(posts).toBe(1)
+    queue.bindQueue(null)
+    queue.bindQueue(1)
+    await flushQueue(qc)
+    expect(posts).toBe(2)
+    expect(requestIds[0]).toBe(requestIds[1])
     expect(server.length).toBe(1)
     expect(queue.fresh()).toEqual([])
   })
@@ -117,7 +135,9 @@ describe('отправка очереди', () => {
     // напрямую: сервер получил подход, ответ потерян; карточка кладёт его в очередь с baseIds
     server.push({ id: 100, workoutExerciseId: 7, position: 1, repsDone: 10, weight: 60 })
     nextId = 101
-    add(1, 10, 60, { attempted: true, baseIds: [] })
+    store.set(queue.queueKey(1), JSON.stringify([
+      { kind: 'add', opId: 'legacy', tempId: -1, weId: 7, position: 1, repsDone: 10, weight: 60, attempted: true, baseIds: [] },
+    ]))
     await flushQueue(qc)
     expect(posts).toBe(0)
     expect(server.length).toBe(1)
@@ -125,9 +145,40 @@ describe('отправка очереди', () => {
   })
 
   it('два одинаковых подхода подряд не принимаются за дубль друг друга', async () => {
-    add(1, 10, 60); add(2, 10, 60)
+    add(1, 10, 60); add(1, 10, 60)
     await flushQueue(qc)
     expect(server.length).toBe(2)
+    expect(requestIds[0]).not.toBe(requestIds[1])
+  })
+
+  it('применяет правку после подтверждения создания с потерянным ответом', async () => {
+    add(1, 10, 60)
+    dropNextPostResponse = true
+    await flushQueue(qc)
+    const pending = queue.fresh()[0]
+    if (pending.kind !== 'add') throw new Error('Expected pending add')
+    queue.editAdd(pending.tempId, { position: 1, repsDone: 8, weight: 65 })
+
+    await flushQueue(qc)
+
+    expect(requestIds[0]).toBe(requestIds[1])
+    expect(server).toEqual([{ id: 100, workoutExerciseId: 7, position: 1, repsDone: 8, weight: 65 }])
+    expect(queue.fresh()).toEqual([])
+  })
+
+  it('удаляет созданный подход, если пользователь отменил запись после потери ответа', async () => {
+    add(1, 10, 60)
+    dropNextPostResponse = true
+    await flushQueue(qc)
+    const pending = queue.fresh()[0]
+    if (pending.kind !== 'add') throw new Error('Expected pending add')
+    queue.removeAdd(pending.tempId)
+
+    await flushQueue(qc)
+
+    expect(requestIds[0]).toBe(requestIds[1])
+    expect(server).toEqual([])
+    expect(queue.fresh()).toEqual([])
   })
 
   it('временный сбой сервера (503) оставляет операцию в очереди', async () => {

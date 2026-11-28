@@ -15,7 +15,10 @@ export interface AddOp extends Base {
   position: number
   repsDone: number
   weight: number
-  /** Запрос мог дойти до сервера, хотя ответ потерялся: для защиты от дубля помним, что там было до него. */
+  requestId?: string
+  sent?: Pick<AddOp, 'position' | 'repsDone' | 'weight'>
+  removed?: boolean
+  /** Поля старой очереди, сохранённой до появления requestId. */
   attempted?: boolean
   baseIds?: number[]
 }
@@ -40,6 +43,7 @@ export function overlaySets(server: WorkoutSet[], ops: QueueOp[], weId: number):
   for (const op of ops) {
     if (op.weId !== weId) continue
     if (op.kind === 'add') {
+      if (op.removed && !op.failed) continue
       list.push({
         id: op.tempId,
         workoutExerciseId: weId,
@@ -86,10 +90,7 @@ export function enqueueDelete(ops: QueueOp[], e: { opId: string; weId: number; s
   return [...rest, { kind: 'delete', ...e }]
 }
 
-/**
- * Правка ещё не отправленного подхода. Сбрасываем признак «мог дойти до сервера»: иначе после правки
- * по сигнатуре нельзя узнать доставленный подход. Лучше видимый дубль, чем молча потерянная правка.
- */
+/** Правка меняет желаемое состояние, а отправленные поля остаются неизменными для повтора POST. */
 export function editAdd(
   ops: QueueOp[],
   tempId: number,
@@ -103,7 +104,10 @@ export function editAdd(
 }
 
 export function removeAdd(ops: QueueOp[], tempId: number): QueueOp[] {
-  return ops.filter((o) => !(o.kind === 'add' && o.tempId === tempId))
+  return ops.flatMap((o): QueueOp[] => {
+    if (o.kind !== 'add' || o.tempId !== tempId) return [o]
+    return o.sent && !o.failed ? [{ ...o, removed: true, tries: 0 }] : []
+  })
 }
 
 /** Дошёл ли подход до сервера в прошлую попытку (появился новый подход с теми же значениями). */

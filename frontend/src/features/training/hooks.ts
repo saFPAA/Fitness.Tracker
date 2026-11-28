@@ -63,15 +63,6 @@ export function useRemoveExercise(workoutId: number) {
   })
 }
 
-export function useAddSet(workoutExerciseId: number) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: trainingApi.addSet,
-    onSuccess: (created) =>
-      qc.setQueryData<WorkoutSet[]>(['sets', workoutExerciseId], (old) => [...(old ?? []), created].sort(byPosition)),
-  })
-}
-
 export function useUpdateSet(workoutExerciseId: number) {
   const qc = useQueryClient()
   return useMutation({

@@ -47,16 +47,11 @@ export const trainingApi = {
     await Promise.all(place.map(put))
   },
 
-  /** Без каскада в БД упражнение с подходами не удалить: сначала подходы. Не атомарно, повтор доделает. */
-  async removeExercise(id: number) {
-    const sets = await trainingApi.setsOf(id)
-    await Promise.all(sets.map((s) => trainingApi.deleteSet(s.id)))
-    await api(`/api/workout-exercise/${id}`, { method: 'DELETE' })
-  },
+  removeExercise: (id: number) => api(`/api/workout-exercise/${id}`, { method: 'DELETE' }),
 
   setsOf: (workoutExerciseId: number) =>
     api<WorkoutSet[]>(`/api/workout-set/workout-exercise/${workoutExerciseId}`),
-  addSet: (body: { workoutExerciseId: number; position: number; repsDone: number; weight: number }) =>
+  addSet: (body: { workoutExerciseId: number; position: number; repsDone: number; weight: number; requestId: string }) =>
     api<WorkoutSet>('/api/workout-set', { method: 'POST', body }),
   updateSet: (id: number, body: { position: number; repsDone: number; weight: number }) =>
     api<WorkoutSet>(`/api/workout-set/${id}`, { method: 'PUT', body }),

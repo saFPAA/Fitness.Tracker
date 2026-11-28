@@ -57,7 +57,7 @@ export function useUpdateWorkout(id: number) {
 export function useDeleteWorkout() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => workoutsApi.removeDeep(id),
+    mutationFn: workoutsApi.remove,
     onSuccess: (_d, id) => {
       qc.removeQueries({ queryKey: ['workout', id] })
       return qc.invalidateQueries({ queryKey: ['workouts'] })

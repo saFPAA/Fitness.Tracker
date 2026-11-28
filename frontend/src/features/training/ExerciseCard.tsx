@@ -53,7 +53,7 @@ export default function ExerciseCard({
   const weight = draft?.weight ?? (seed ? toInput(seed.weight) : '')
   const edit = (patch: Partial<{ reps: string; weight: string }>) => setDraft({ reps, weight, ...patch })
 
-  const log = async () => {
+  const log = () => {
     setError(null)
     setRecord(null)
     const r = fromInput(reps)
@@ -63,10 +63,7 @@ export default function ExerciseCard({
     // рекорд сравниваем с прошлыми тренировками и уже записанными подходами; без загруженной истории не сравниваем
     const kind = progressQ.isSuccess ? recordOf([...past, ...sets], r, w) : null
     try {
-      await actions.addSet(
-        { position: sets.reduce((m, s) => Math.max(m, s.position), 0) + 1, repsDone: r, weight: w },
-        serverSets.map((s) => s.id),
-      )
+      actions.addSet({ position: sets.reduce((m, s) => Math.max(m, s.position), 0) + 1, repsDone: r, weight: w })
       setDraft({ reps: String(r), weight: toInput(w) })
       if (kind) setRecord(kind === 'weight' ? 'Новый рекорд веса!' : 'Новый рекорд расчётного максимума!')
       onLogged()
@@ -157,8 +154,8 @@ export default function ExerciseCard({
                 ★ {record}
               </p>
             )}
-            <Button onClick={() => void log()} disabled={actions.addPending || setsQ.isPending}>
-              {actions.addPending ? 'Записываем…' : `Записать подход ${sets.length + 1}`}
+            <Button onClick={log} disabled={setsQ.isPending}>
+              Записать подход {sets.length + 1}
             </Button>
           </div>
 

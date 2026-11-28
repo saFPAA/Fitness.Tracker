@@ -33,15 +33,17 @@ function emit() {
   listeners.forEach((l) => l())
 }
 
-function commit(next: QueueOp[]) {
-  ops = next
+function commit(next: QueueOp[], requireStorage = false) {
+  if (requireStorage && uid == null) throw new Error('Войдите, чтобы записать подход')
   if (uid != null) {
     try {
       localStorage.setItem(key(uid), JSON.stringify(next))
     } catch {
+      if (requireStorage) throw new Error('Не удалось сохранить подход на устройстве')
       /* хранилище переполнено или недоступно: очередь останется только в памяти */
     }
   }
+  ops = next
   emit()
 }
 
@@ -91,12 +93,18 @@ export function enqueueAdd(v: {
   position: number
   repsDone: number
   weight: number
-  attempted?: boolean
-  baseIds?: number[]
 }) {
-  const op: AddOp = { kind: 'add', opId: newId(), tempId: newTempId(), ...v }
-  commit([...fresh(), op])
-  requestFlush()
+  const op: AddOp = { kind: 'add', opId: newId(), requestId: newRequestId(), tempId: newTempId(), ...v }
+  commit([...fresh(), op], true)
+  requestFlush(0)
+}
+
+export function newRequestId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-')
 }
 
 export function enqueueUpdate(v: { weId: number; setId: number; position: number; repsDone: number; weight: number }) {
@@ -116,14 +124,27 @@ export function editAdd(tempId: number, v: { position: number; repsDone: number;
 
 export function removeAdd(tempId: number) {
   commit(removeAddOp(fresh(), tempId))
+  requestFlush(0)
+}
+
+export function completeAdd(opId: string, setId: number) {
+  commit(fresh().flatMap((o): QueueOp[] => {
+    if (o.kind !== 'add' || o.opId !== opId) return [o]
+    const { weId, position, repsDone, weight, sent } = o
+    if (o.removed) return [{ kind: 'delete', opId, weId, setId }]
+    if (sent && (position !== sent.position || repsDone !== sent.repsDone || weight !== sent.weight)) {
+      return [{ kind: 'update', opId, weId, setId, position, repsDone, weight }]
+    }
+    return []
+  }))
 }
 
 export function removeOp(opId: string) {
   commit(fresh().filter((o) => o.opId !== opId))
 }
 
-export function patchOp(opId: string, patch: Partial<AddOp> & { failed?: string; tries?: number }) {
-  commit(fresh().map((o) => (o.opId === opId ? ({ ...o, ...patch } as QueueOp) : o)))
+export function patchOp(opId: string, patch: Partial<AddOp>, requireStorage = false) {
+  commit(fresh().map((o) => (o.opId === opId ? ({ ...o, ...patch } as QueueOp) : o)), requireStorage)
 }
 
 /** «Повторить»: снимаем отметку об отказе со всех операций. */

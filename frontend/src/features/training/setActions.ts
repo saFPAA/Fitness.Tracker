@@ -2,16 +2,15 @@ import { ApiError } from '../../api/client'
 import * as queue from '../../lib/offlineQueue'
 import type { DisplaySet } from '../../lib/queueLogic'
 import { useQueueOps } from '../sync/online'
-import { useAddSet, useDeleteSet, useUpdateSet } from './hooks'
+import { useDeleteSet, useUpdateSet } from './hooks'
 
 const noConnection = (e: unknown) => e instanceof ApiError && e.status === 0
 
 /**
- * Запись, правка и удаление подходов. Пока связь есть, всё уходит на сервер сразу.
- * Если связи нет, изменение ставится в очередь на телефоне и отправится позже; в интерфейсе оно видно сразу.
+ * Новый подход сохраняется в очереди до первой отправки. Правки и удаления серверных
+ * подходов отправляются сразу, а при потере связи попадают в очередь.
  */
 export function useSetActions(weId: number) {
-  const add = useAddSet(weId)
   const update = useUpdateSet(weId)
   const del = useDeleteSet(weId)
   const ops = useQueueOps()
@@ -20,24 +19,15 @@ export function useSetActions(weId: number) {
     ops.some((o) => (o.kind === 'update' || o.kind === 'delete') && o.setId === setId)
 
   return {
-    busy: add.isPending || update.isPending || del.isPending,
-    addPending: add.isPending,
+    busy: update.isPending || del.isPending,
 
-    /** knownIds: подходы на сервере на момент записи, нужны для защиты от дубля при потерянном ответе. */
-    async addSet(v: { position: number; repsDone: number; weight: number }, knownIds: number[]) {
-      // пока в очереди есть изменения этого упражнения, новое тоже идёт в очередь, чтобы порядок не смешался
-      if (ops.some((o) => o.weId === weId)) return queue.enqueueAdd({ weId, ...v })
-      try {
-        await add.mutateAsync({ workoutExerciseId: weId, ...v })
-      } catch (e) {
-        if (noConnection(e)) return queue.enqueueAdd({ weId, ...v, attempted: true, baseIds: knownIds })
-        throw e
-      }
+    addSet(v: { position: number; repsDone: number; weight: number }) {
+      queue.enqueueAdd({ weId, ...v })
     },
 
     async saveSet(set: DisplaySet, v: { repsDone: number; weight: number }) {
       const body = { position: set.position, ...v }
-      if (set.id < 0) return queue.editAdd(set.id, body) // ещё не отправлен: правим запись в очереди
+      if (set.id < 0) return queue.editAdd(set.id, body) // создание ещё не подтверждено
       if (hasPendingFor(set.id)) return queue.enqueueUpdate({ weId, setId: set.id, ...body })
       try {
         await update.mutateAsync({ id: set.id, ...body })

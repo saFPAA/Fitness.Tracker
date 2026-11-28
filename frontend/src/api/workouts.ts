@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Page, Workout, WorkoutExercise, WorkoutSet } from './types'
+import type { Page, Workout } from './types'
 
 export const workoutsApi = {
   byUser: (userId: number, pageNumber: number, pageSize: number) =>
@@ -20,18 +20,5 @@ export const workoutsApi = {
   create: (body: { name: string; date: string; userId: number }) =>
     api<Workout>('/api/workout', { method: 'POST', body }),
 
-  /**
-   * В схеме БД нет ON DELETE CASCADE, поэтому сервер отказывается (409) удалять тренировку с упражнениями.
-   * Удаляем снизу вверх: подходы → упражнения → тренировка. Это НЕ атомарно: при сбое посередине
-   * тренировка остаётся частично очищенной, повторное удаление доделает работу.
-   */
-  async removeDeep(id: number) {
-    const exercises = await api<WorkoutExercise[]>(`/api/workout-exercise/workout/${id}`)
-    const setsPerExercise = await Promise.all(
-      exercises.map((e) => api<WorkoutSet[]>(`/api/workout-set/workout-exercise/${e.id}`)),
-    )
-    await Promise.all(setsPerExercise.flat().map((s) => api(`/api/workout-set/${s.id}`, { method: 'DELETE' })))
-    await Promise.all(exercises.map((e) => api(`/api/workout-exercise/${e.id}`, { method: 'DELETE' })))
-    await api(`/api/workout/${id}`, { method: 'DELETE' })
-  },
+  remove: (id: number) => api(`/api/workout/${id}`, { method: 'DELETE' }),
 }
